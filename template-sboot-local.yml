@@ -1,1 +1,4 @@
 
+logging:
+  level:
+    com.lseg.ipps.solutions.tpl.service: WARN
