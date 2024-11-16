@@ -1,4 +1,4 @@
 
 logging:
   level:
-    com.lseg.ipps.solutions.tpl.service: DEBUG
+    com.lseg.ipps.solutions.tpl.service: WARN
