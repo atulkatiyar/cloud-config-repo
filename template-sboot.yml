@@ -1,0 +1,4 @@
+logging:
+  level:
+    root: INFO
+    com.lseg.ipps.solutions.tpl.service: DEBUG
