@@ -1,4 +1,4 @@
 logging:
   level:
     root: INFO
-    com.spring.cloud.client.controller: INFO
+    com.spring.cloud.client.controller: WARN
