@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html>
 <head>
-    <title>Countdown Timer</title>
+    <title>Log4j Configuration Dashboard</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
@@ -30,6 +30,7 @@
             padding-bottom: 5px;
         }
         label {
+        color: #555;
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
@@ -37,7 +38,7 @@
         input, select {
             width: 100%;
             padding: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
@@ -65,12 +66,14 @@
         div.countdown {
             font-size: 18px;
         }
+
         .timer-container {
-            margin: 20px 0;
+            margin: 10px 0;
             padding: 10px;
             background-color: #e9ecef;
             border-radius: 5px;
             display: inline-block;
+            margin-bottom: 20px;
         }
 
         #countdown {
@@ -135,7 +138,6 @@
             background-color: #f8d7da;
         }
 
-        /* Style for long content */
         .log-value-cell {
             max-width: 500px;
             overflow-x: auto;
@@ -147,9 +149,9 @@
     </style>
 </head>
 <body>
-
-<form id="configForm" action="/generate-log4j-config" method="post" onsubmit="return usubmit()">
-    <h3>Root Logger</h3>
+<h1>Log4j Configuration Dashboard</h1>
+<form id="configForm" action="/log4j2.xml" method="post" onsubmit="return usubmit()">
+    <h3>Root Log Level</h3>
     <select name="rootLevel" id="rootLevel">
         <option value="INFO">INFO</option>
         <option value="DEBUG">DEBUG</option>
@@ -169,15 +171,19 @@
             <label for="level_1">Log Level:</label>
             <select name="packageLevel">
                 <option value="DEBUG">DEBUG</option>
+                <option value="ERROR">FATAL</option>
                 <option value="INFO">INFO</option>
                 <option value="WARN">WARN</option>
                 <option value="ERROR">ERROR</option>
+                <option value="ERROR">TRACE</option>
             </select>
         </div>
     </div>
-    <label for="timerLabel">Select Time</label>
+    <h3><label for="timerLabel">Log Level Time</label></h3>
     <select name="timer" id="timer">
+
         <option value="" disabled="disabled" selected="selected">Please select a time</option>
+        <option value="1">1 minutes</option>
         <option value="5">5 minutes</option>
         <option value="30">30 minutes</option>
         <option value="120">120 minutes</option>
@@ -189,10 +195,11 @@
             id="generate-log4j-xml" class="generate-log4j-xml">Generate log4j.xml
     </button>
 </form>
+
 <div id="logContainer" class="log-container">
     <h3>Logging Information
     </h3>
-    <table class="log-table">
+    <table class="log-table" id="logEntries">
         <thead>
         <tr>
             <th>Property</th>
@@ -239,8 +246,9 @@
         }
 
         // Check remaining time on page load
-        $.get(`/get-remaining-time?userId=${userId}`, function(response) {
+        $.get(`/remaining-time?userId=${userId}`, function(response) {
             updateTimer(response.remainingTime);
+            displayLogInfo(response);
         });
 
         function usubmit() {
@@ -252,7 +260,7 @@
 
             $.ajax({
                 url: form.attr('action'),
-                type: 'POST',
+                type: 'PUT',
                 data: formData,
                 processData: false,
                 contentType: false,
@@ -271,59 +279,61 @@
                 }
             });
 
+
             // Prevent default form submission
             return false;
         }
 
         // Sync timer every minute
         setInterval(function() {
-            $.get(`/get-remaining-time?userId=${userId}`, function(response) {
+            $.get(`/remaining-time?userId=${userId}`, function(response) {
                 updateTimer(response.remainingTime);
             });
         }, 60000);
 
         function displayLogInfo(logData) {
-        const tableBody = $('#logTableBody');
-            tableBody.empty();
-            const logEntries = $('#logEntries');
+            const logEntries = $('#logTableBody');
             logEntries.empty(); // Clear previous entries
 
             // Sort the keys to ensure consistent display order
             const logData1 = logData.data;
+            if(Object.keys(logData1).length == 0) {
+            $('#logContainer').hide();
+            return;
+            }
+            $('#logContainer').show();
             const sortedKeys = Object.keys(logData1).sort();
 
             sortedKeys.forEach(key => {
                 // Skip the remainingTime key as it's handled separately
                 if (key === 'remainingTime') return;
 
-                if (key === 'remainingTime') {
-                    
-                }
+                const value = logData1[key];
+                 const row = $('<tr>');
+                 var loggerKey = '';
+                 if(key == 'packageLogLevels') {
+                 loggerKey = 'Package Specific Logging Level';
+                 } else {
+                 loggerKey = 'Root Level';
+                 }
+                   row.append(
+                        $('<td>')
+                            .text(loggerKey)
+                    );
 
-                const value = logData[key];
-                const row = $('<tr>');
+                    row.append(
+                        $('<td>')
+                            .addClass('log-value-cell')
+                            .text(formatValue(value))
+                    );
 
-                row.append(
-                    $('<td>')
-                        .text(formatKey(key))
-                );
-
-                row.append(
-                    $('<td>')
-                        .addClass('log-value-cell')
-                        .text(formatValue(value))
-                );
-
-                tableBody.append(row);
+                    logEntries.append(row);
             });
         }
 
         function formatKey(key) {
             // Convert camelCase to Title Case with Spaces
             return key
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/([A-Z])/g, ' <01></01>')
-                .replace(/^./, str => str.toUpperCase())
                 + ':';
         }
 
@@ -331,12 +341,12 @@
             if (value === null) return 'N/A';
             if (typeof value === 'boolean') return value ? 'Yes' : 'No';
             if (typeof value === 'object') return JSON.stringify(value, null, 2);
-            return value != undefined ? value.toString() : '';
+            return value.toString();
         }
 
-    $(document).ready(function () {
+        $(document).ready(function () {
     // Define the API endpoint to fetch the log data
-    const apiEndpoint = '/get-log-data';
+    const apiEndpoint = '/log4j-data';
 
     // Make an AJAX GET request to fetch the log data
     $.get(apiEndpoint, function (response) {
