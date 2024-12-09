@@ -1,0 +1,11 @@
+    @GetMapping("/get-log-data")
+    public ResponseEntity<Map<String, Object>> getLogData() {
+        // Example data to be returned from the API
+        Map<String, Object> logData = new HashMap<>();
+        logData.put("LogLevel", "INFO");
+        logData.put("AppVersion", "1.0.0");
+        logData.put("StartTime", "2024-11-26T10:00:00Z");
+
+        // Additional fields as needed
+        return ResponseEntity.ok(logData);
+    }
