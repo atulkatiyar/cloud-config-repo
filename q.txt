@@ -1,1 +1,4 @@
 fatal: remote error: Insufficient permissions. You cannot push to Repo. Pushing requires write access and your access is read-only getting error on intellij
+
+
+could not delete references: cannot lock ref 'refs/remotes/origin/feature/FRPS-10988': Unable to create
