@@ -1,0 +1,1 @@
+fatal: remote error: Insufficient permissions. You cannot push to Repo. Pushing requires write access and your access is read-only getting error on intellij
