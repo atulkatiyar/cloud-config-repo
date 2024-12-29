@@ -1,11 +1,45 @@
-<spring-boot.version>3.2.5</spring-boot.version>
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.lseg.ipps.solutions</groupId>
+        <artifactId>solutions</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+
+    <groupId>com.lseg.ipps.solutions.shared.solutions</groupId>
+    <artifactId>shared-solutions</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>api-mock-service</module>
+        <module>log-level-agent</module>
+        <module>log-level-controller</module>
+        <module>spring-security</module>
+    </modules>
+
+    <properties>
+        <revision>local-SNAPSHOT</revision>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-boot.version>3.2.5</spring-boot.version>
+        <log4j.version>2.21.1</log4j.version>
+        <slf4j.version>2.0.11</slf4j.version>
+        <fasterxml-jackson.version>2.17.1</fasterxml-jackson.version>
+        <spring.boot.cache.version>3.2.5</spring.boot.cache.version>
+        <caffeine.version>3.1.8</caffeine.version>
         <spring-framework.version>6.1.6</spring-framework.version>
         <spring-security.version>6.2.4</spring-security.version>
+        <!--<spring.boot.maven-plugin.version>3.2.5</spring.boot.maven-plugin.version>-->
+    </properties>
 
-
-<dependencyManagement>
+    <dependencyManagement>
         <dependencies>
-            <!-- Spring Boot BOM -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
@@ -13,7 +47,7 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            
+
             <!-- Explicitly manage Spring Framework version -->
             <dependency>
                 <groupId>org.springframework</groupId>
@@ -22,7 +56,7 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            
+
             <!-- Explicitly manage Spring Security version -->
             <dependency>
                 <groupId>org.springframework.security</groupId>
@@ -34,5 +68,80 @@
         </dependencies>
     </dependencyManagement>
 
+</project>
 
-mvn dependency:purge-local-repository -DreResolve=false -DactTransitively=true -DmanualInclude="org.springframework:spring-core,org.springframework.boot:spring-boot,org.springframework.security:spring-security-core"
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.lseg.ipps.solutions.shared.solutions</groupId>
+        <artifactId>shared-solutions</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <groupId>com.lseg.ipps.solutions.tpl</groupId>
+    <artifactId>spring-security</artifactId>
+    <version>${revision}</version>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.1</version>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
