@@ -1,4 +1,4 @@
-java.lang.NoSuchMethodError: org.yaml.snakeyaml.representer.Representer: method 'void <init>()' not found
+java.lang.NoSuchMethodError: 'org.springframework.core.io.support.SpringFactoriesLoader org.springframework.core.io.support.SpringFactoriesLoader.forDefaultResourceLocation(java.lang.ClassLoader)'
 
 
 <?xml version="1.0" encoding="UTF-8"?>
@@ -31,6 +31,18 @@ java.lang.NoSuchMethodError: org.yaml.snakeyaml.representer.Representer: method 
         <snakeyaml.version>2.3</snakeyaml.version>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
     <dependency>
         <groupId>org.springframework.boot</groupId>
@@ -52,7 +64,6 @@ java.lang.NoSuchMethodError: org.yaml.snakeyaml.representer.Representer: method 
         <dependency>
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
-            <version>2.2</version>
         </dependency>
 
         <dependency>
@@ -97,16 +108,3 @@ java.lang.NoSuchMethodError: org.yaml.snakeyaml.representer.Representer: method 
     </build>
 
 </project>
-
-
-<dependencyManagement>
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-dependencies</artifactId>
-            <version>${spring-boot.version}</version>
-            <type>pom</type>
-            <scope>import</scope>
-        </dependency>
-    </dependencies>
-</dependencyManagement>
