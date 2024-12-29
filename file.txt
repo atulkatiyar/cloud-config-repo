@@ -1,36 +1,42 @@
-java.lang.IllegalArgumentException: Unable to instantiate factory class [org.springframework.boot.autoconfigure.SharedMetadataReaderFactoryContextInitializer] for factory type [org.springframework.context.ApplicationContextInitializer]
-	at org.springframework.core.io.support.SpringFactoriesLoader$FailureHandler.lambda$throwing$0(SpringFactoriesLoader.java:647)
-	at org.springframework.core.io.support.SpringFactoriesLoader$FailureHandler.lambda$handleMessage$3(SpringFactoriesLoader.java:671)
-	at org.springframework.core.io.support.SpringFactoriesLoader.instantiateFactory(SpringFactoriesLoader.java:231)
-	at org.springframework.core.io.support.SpringFactoriesLoader.load(SpringFactoriesLoader.java:206)
-	at org.springframework.core.io.support.SpringFactoriesLoader.load(SpringFactoriesLoader.java:160)
-	at org.springframework.boot.SpringApplication.getSpringFactoriesInstances(SpringApplication.java:483)
-	at org.springframework.boot.SpringApplication.getSpringFactoriesInstances(SpringApplication.java:479)
-	at org.springframework.boot.SpringApplication.<init>(SpringApplication.java:295)
-	at org.springframework.boot.SpringApplication.<init>(SpringApplication.java:274)
-	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1363)
-	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1352)
-	at tpl.Main.main(Main.java:10)
-Caused by: java.lang.NoClassDefFoundError: org/springframework/beans/factory/aot/BeanRegistrationExcludeFilter
-	at java.base/java.lang.ClassLoader.defineClass1(Native Method)
-	at java.base/java.lang.ClassLoader.defineClass(ClassLoader.java:1012)
-	at java.base/java.security.SecureClassLoader.defineClass(SecureClassLoader.java:150)
-	at java.base/jdk.internal.loader.BuiltinClassLoader.defineClass(BuiltinClassLoader.java:862)
-	at java.base/jdk.internal.loader.BuiltinClassLoader.findClassOnClassPathOrNull(BuiltinClassLoader.java:760)
-	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClassOrNull(BuiltinClassLoader.java:681)
-	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:639)
-	at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:188)
-	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:520)
-	at java.base/java.lang.Class.forName0(Native Method)
-	at java.base/java.lang.Class.forName(Class.java:467)
-	at org.springframework.util.ClassUtils.forName(ClassUtils.java:304)
-	at org.springframework.core.io.support.SpringFactoriesLoader.instantiateFactory(SpringFactoriesLoader.java:224)
-	... 9 more
-Caused by: java.lang.ClassNotFoundException: org.springframework.beans.factory.aot.BeanRegistrationExcludeFilter
-	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:641)
-	at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:188)
-	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:520)
-	... 22 more
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.lseg.ipps.solutions</groupId>
+        <artifactId>solutions</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+
+    <groupId>com.lseg.ipps.solutions.shared.solutions</groupId>
+    <artifactId>shared-solutions</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>api-mock-service</module>
+        <module>log-level-agent</module>
+        <module>log-level-controller</module>
+        <module>spring-security</module>
+    </modules>
+
+    <properties>
+        <revision>local-SNAPSHOT</revision>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-boot.version>3.3.4</spring-boot.version>
+        <log4j.version>2.21.1</log4j.version>
+        <slf4j.version>2.0.11</slf4j.version>
+        <fasterxml-jackson.version>2.17.1</fasterxml-jackson.version>
+        <spring.boot.cache.version>3.2.5</spring.boot.cache.version>
+        <caffeine.version>3.1.8</caffeine.version>
+    </properties>
+
+</project>
+
 
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -43,7 +49,7 @@ Caused by: java.lang.ClassNotFoundException: org.springframework.beans.factory.a
         <version>${revision}</version>
     </parent>
 
-    <groupId>org.example</groupId>
+    <groupId>com.lseg.ipps.solutions.tpl</groupId>
     <artifactId>spring-security</artifactId>
     <version>${revision}</version>
 
@@ -51,13 +57,6 @@ Caused by: java.lang.ClassNotFoundException: org.springframework.beans.factory.a
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.2.5</spring-boot.version>
-        <log4j.version>2.21.1</log4j.version>
-        <slf4j.version>2.0.11</slf4j.version>
-        <fasterxml-jackson.version>2.17.1</fasterxml-jackson.version>
-        <spring-boot-maven-plugin.version>3.2.5</spring-boot-maven-plugin.version>
-        <spring.boot.cache.version>3.2.5</spring.boot.cache.version>
-        <caffeine.version>3.1.8</caffeine.version>
     </properties>
 
     <dependencyManagement>
@@ -73,24 +72,20 @@ Caused by: java.lang.ClassNotFoundException: org.springframework.beans.factory.a
     </dependencyManagement>
 
     <dependencies>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-web</artifactId>
-        <exclusions>
-            <exclusion>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-logging</artifactId>
-            </exclusion>
-        </exclusions>
-    </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
-            <groupId>org.yaml</groupId>
-            <artifactId>snakeyaml</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
         <dependency>
@@ -105,7 +100,6 @@ Caused by: java.lang.ClassNotFoundException: org.springframework.beans.factory.a
         </dependency>
 
 
-
     </dependencies>
 
     <build>
@@ -113,9 +107,10 @@ Caused by: java.lang.ClassNotFoundException: org.springframework.beans.factory.a
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>${spring-boot-maven-plugin.version}</version>
             </plugin>
         </plugins>
     </build>
 
 </project>
+
+java.lang.NoSuchMethodError: 'org.springframework.core.io.support.SpringFactoriesLoader org.springframework.core.io.support.SpringFactoriesLoader.forDefaultResourceLocation(java.lang.ClassLoader)'
