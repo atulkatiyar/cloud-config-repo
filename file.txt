@@ -1,4 +1,4 @@
-java.lang.IllegalStateException: Attempted to load Config resource 'class path resource [application.yml]' via location 'optional:classpath:/' but snakeyaml was not found on the classpath
+java.lang.NoSuchMethodError: org.yaml.snakeyaml.representer.Representer: method 'void <init>()' not found
 
 
 <?xml version="1.0" encoding="UTF-8"?>
@@ -41,16 +41,18 @@ java.lang.IllegalStateException: Attempted to load Config resource 'class path r
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter-logging</artifactId>
             </exclusion>
-            <exclusion>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-            </exclusion>
         </exclusions>
     </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
             <version>${spring.boot.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.2</version>
         </dependency>
 
         <dependency>
