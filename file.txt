@@ -51,7 +51,7 @@ Caused by: java.lang.ClassNotFoundException: org.springframework.beans.factory.a
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.3.4</spring-boot.version>
+        <spring-boot.version>3.2.5</spring-boot.version>
         <log4j.version>2.21.1</log4j.version>
         <slf4j.version>2.0.11</slf4j.version>
         <fasterxml-jackson.version>2.17.1</fasterxml-jackson.version>
@@ -97,24 +97,13 @@ Caused by: java.lang.ClassNotFoundException: org.springframework.beans.factory.a
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-beans</artifactId>
-        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-web</artifactId>
-        </dependency>
+
 
 
     </dependencies>
