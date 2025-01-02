@@ -4,192 +4,251 @@
     <title>Log4j Configuration Dashboard</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --background-color: #f1f5f9;
+            --card-background: #ffffff;
+            --text-color: #1f2937;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
             margin: 0;
-            padding: 0;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        .configForm {
-            max-width: 600px;
-            margin: 20px auto;
             padding: 20px;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            min-height: 100vh;
         }
 
-        .logout-form {
-            width: 200;
-            margin: 20px auto;
-            padding: 20px;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        .dashboard-header {
+            background: var(--card-background);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        h3 {
-            color: #555;
-            margin-bottom: 10px;
-            border-bottom: 2px solid #ddd;
-            padding-bottom: 5px;
+
+        .dashboard-title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin: 0;
         }
-        label {
-        color: #555;
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
+
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
-        input, select {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        button {
-            width: 100%;
-            padding: 10px;
-            background-color: #007bff;
-            border: none;
+
+        .logout-btn {
+            padding: 0.5rem 1rem;
+            background-color: #ef4444;
             color: white;
-            font-size: 16px;
-            border-radius: 4px;
+            border: none;
+            border-radius: 6px;
             cursor: pointer;
+            transition: background-color 0.3s;
         }
-        button:hover {
-            background-color: #0056b3;
+
+        .logout-btn:hover {
+            background-color: #dc2626;
         }
-        .package-group {
-            margin-bottom: 20px;
+
+        .config-card {
+            background: var(--card-background);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .section-title {
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
+            font-weight: 500;
+        }
+
+        .form-select, .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-select:focus, .form-input:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
         .package-group {
-            margin-bottom: 20px;
-        }
-        div.countdown {
-            font-size: 18px;
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
         }
 
         .timer-container {
-            margin: 10px 0;
-            padding: 10px;
-            background-color: #e9ecef;
-            border-radius: 5px;
-            display: inline-block;
-            margin-bottom: 20px;
+            background: #e0f2fe;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
 
         #countdown {
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
             font-weight: bold;
-            color: #007bff;
+            color: var(--primary-color);
+        }
+
+        .submit-btn {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+
+        .submit-btn:hover {
+            background-color: var(--secondary-color);
         }
 
         .log-container {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 5px;
+            background: var(--card-background);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-top: 2rem;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .log-table {
             width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-            background-color: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 1rem;
         }
 
         .log-table th {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            padding: 12px;
+            background-color: #f8fafc;
+            padding: 1rem;
             text-align: left;
-            font-weight: bold;
-            color: #495057;
+            font-weight: 600;
+            border-bottom: 2px solid #e5e7eb;
         }
 
         .log-table td {
-            border: 1px solid #dee2e6;
-            padding: 10px;
-            vertical-align: top;
-        }
-
-        .log-table tr:nth-child(even) {
-            background-color: #f8f9fa;
-        }
-
-        .log-table tr:hover {
-            background-color: #f2f2f2;
-        }
-
-        .copy-btn {
-            float: right;
-            margin: 10px;
-            padding: 8px 15px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            width:25%;
-        }
-
-        .copy-btn:hover {
-            background-color: #0056b3;
-        }
-
-        .error-row td {
-            color: #dc3545;
-            background-color: #f8d7da;
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
         }
 
         .log-value-cell {
-            max-width: 500px;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
+            font-family: 'Courier New', monospace;
+            background: #f8fafc;
+            border-radius: 4px;
+            padding: 0.5rem !important;
         }
 
+        .add-package-btn {
+            background-color: #10b981;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 1rem;
+            transition: background-color 0.3s;
+        }
 
+        .add-package-btn:hover {
+            background-color: #059669;
+        }
+
+        .remove-package-btn {
+            background-color: #ef4444;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 0.5rem;
+            transition: background-color 0.3s;
+        }
+
+        .remove-package-btn:hover {
+            background-color: #dc2626;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            
+            .dashboard-header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            
+            .form-group {
+                margin-bottom: 1rem;
+            }
+        }
     </style>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-<h1>Log4j Configuration Dashboard</h1>
-<div>
-    <span sec:authentication="name" class="me-3"></span>
-    <form th:action="@{/logout}" method="post" class="d-inline">
-        <button type="submit"  class="copy-btn btn btn-outline-danger">Logout</button>
-    </form>
-</div>
+    <div class="dashboard-header">
+        <h1 class="dashboard-title">Log4j Configuration Dashboard</h1>
+        <div class="user-section">
+            <span class="user-name" sec:authentication="name"></span>
+            <form th:action="@{/logout}" method="post" class="d-inline">
+                <button type="submit" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </form>
+        </div>
+    </div>
 
-<form id="configForm"  class="configForm" action="/api/log4j2.xml" method="post" onsubmit="return usubmit()">
-    <h3>Root Log Level</h3>
-    <select name="rootLevel" id="rootLevel">
-        <option value="WARN">WARN</option>
-        <option value="FATAL">FATAL</option>
-        <option value="ERROR">ERROR</option>
-        <option value="INFO">INFO</option>
-        <option value="DEBUG">DEBUG</option>
-        <option value="TRACE">TRACE</option>
-    </select>
-
-    <!--    <h3>File Appender</h3>
-        <label for="filePath">File Path:</label>
-        <input type="text" id="filePath" name="filePath" placeholder="e.g., logs/app.log"/>-->
-
-    <h3>Package-Specific Log Levels</h3>
-    <div id="packages">
-        <div class="package-group">
-            <label for="package_1">Package Name:</label>
-            <input type="text" name="packageName" placeholder="e.g., com.example"/>
-            <label for="level_1">Log Level:</label>
-            <select name="packageLevel">
+    <form id="configForm" class="config-card" action="/api/log4j2.xml" method="post" onsubmit="return usubmit()">
+        <div class="form-group">
+            <h3 class="section-title">Root Log Level</h3>
+            <select name="rootLevel" id="rootLevel" class="form-select">
                 <option value="WARN">WARN</option>
                 <option value="FATAL">FATAL</option>
                 <option value="ERROR">ERROR</option>
@@ -198,50 +257,88 @@
                 <option value="TRACE">TRACE</option>
             </select>
         </div>
+
+        <div class="form-group">
+            <h3 class="section-title">Package-Specific Log Levels</h3>
+            <button type="button" class="add-package-btn" onclick="addPackage()">
+                <i class="fas fa-plus"></i> Add Package
+            </button>
+            <div id="packages"></div>
+        </div>
+
+        <div class="form-group">
+            <h3 class="section-title">Log Level Duration</h3>
+            <select name="timer" id="timer" class="form-select">
+                <option value="" disabled selected>Please select a time</option>
+                <option value="60">1 minute</option>
+                <option value="120">2 minutes</option>
+                <option value="300">5 minutes</option>
+                <option value="1800">30 minutes</option>
+                <option value="72000">120 minutes</option>
+            </select>
+            <div class="timer-container">
+                <i class="fas fa-clock"></i>
+                <span id="countdown">00:00:00</span>
+            </div>
+        </div>
+
+        <button type="submit" class="submit-btn">
+            <i class="fas fa-cog"></i> Generate log4j.xml
+        </button>
+    </form>
+
+    <div id="logContainer" class="log-container" style="display: none;">
+        <h3 class="section-title">Logging Information</h3>
+        <table class="log-table" id="logEntries">
+            <thead>
+                <tr>
+                    <th>Property</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody id="logTableBody">
+            </tbody>
+        </table>
     </div>
-    <h3><label for="timerLabel">Log Level Time</label></h3>
-    <select name="timer" id="timer">
 
-        <option value="" disabled="disabled" selected="selected">Please select a time</option>
-        <option value="60">1 minutes</option>
-        <option value="120">2 minutes</option>
-        <option value="300">5 minutes</option>
-        <option value="1800">30 minutes</option>
-        <option value="72000">120 minutes</option>
-    </select>
-    <div class="timer-container">
-        Time Remaining: <span id="countdown">00:00:00</span>
-    </div>
-    <button type="submit"
-            id="generate-log4j-xml" class="generate-log4j-xml">Generate log4j.xml
-    </button>
-</form>
-
-<div id="logContainer" class="log-container">
-    <h3>Logging Information
-    </h3>
-    <table class="log-table" id="logEntries">
-        <thead>
-        <tr>
-            <th>Property</th>
-            <th>Value</th>
-        </tr>
-        </thead>
-        <tbody id="logTableBody">
-        </tbody>
-    </table>
-</div>
-</body>
-
-<script>
+    <script>
         let timerId;
-        const userId = 'admin'; // Replace with actual user ID
+        const userId = 'admin';
+
+        function addPackage() {
+            const packageDiv = document.createElement('div');
+            packageDiv.className = 'package-group';
+            packageDiv.innerHTML = `
+                <div class="form-group">
+                    <label class="form-label">Package Name:</label>
+                    <input type="text" name="packageName" class="form-input" placeholder="e.g., com.example"/>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Log Level:</label>
+                    <select name="packageLevel" class="form-select">
+                        <option value="WARN">WARN</option>
+                        <option value="FATAL">FATAL</option>
+                        <option value="ERROR">ERROR</option>
+                        <option value="INFO">INFO</option>
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="TRACE">TRACE</option>
+                    </select>
+                </div>
+                <button type="button" class="remove-package-btn" onclick="this.parentElement.remove()">
+                    <i class="fas fa-trash"></i> Remove
+                </button>
+            `;
+            document.getElementById('packages').appendChild(packageDiv);
+        }
+
+        // Add initial package group
+        addPackage();
 
         function updateTimer(remainingMs) {
             clearInterval(timerId);
 
             if (remainingMs <= 0) {
-                $('#countdown').text('Timer: 00:00:00');
+                $('#countdown').text('00:00:00');
                 return;
             }
 
@@ -251,14 +348,14 @@
                 const seconds = Math.floor((remainingMs % 60000) / 1000);
 
                 $('#countdown').text(
-                    `Timer: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+                    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
                 );
 
                 remainingMs -= 1000;
 
                 if (remainingMs < 0) {
                     clearInterval(timerId);
-                    $('#countdown').text('Timer: 00:00:00');
+                    $('#countdown').text('00:00:00');
                 }
             }
 
@@ -266,17 +363,9 @@
             timerId = setInterval(displayTime, 1000);
         }
 
-        // Check remaining time on page load
-        $.get(`/api/remaining-time`, function(response) {
-            updateTimer(response.remainingTime);
-            displayLogInfo(response);
-        });
-
         function usubmit() {
             const form = $('#configForm');
             const formData = new FormData(form[0]);
-
-            // Add userId to the form data
             formData.append('userId', userId);
 
             $.ajax({
@@ -286,69 +375,44 @@
                 processData: false,
                 contentType: false,
                 success: function(response) {
-                    // Handle the log4j config generation response
-                         displayLogInfo(response);
-
-                    // Update the timer with the new remaining time
+                    displayLogInfo(response);
                     if (response.remainingTime !== undefined) {
                         updateTimer(response.remainingTime);
                     }
                 },
                 error: function(xhr, status, error) {
                     console.error('Error:', error);
-                    // Handle error appropriately
                 }
             });
 
-
-            // Prevent default form submission
             return false;
         }
 
         function displayLogInfo(logData) {
             const logEntries = $('#logTableBody');
-            logEntries.empty(); // Clear previous entries
+            logEntries.empty();
 
-            // Sort the keys to ensure consistent display order
             const logData1 = logData.data;
             if(Object.keys(logData1).length == 0) {
-            $('#logContainer').hide();
-            return;
+                $('#logContainer').hide();
+                return;
             }
+            
             $('#logContainer').show();
             const sortedKeys = Object.keys(logData1).sort();
 
             sortedKeys.forEach(key => {
-                // Skip the remainingTime key as it's handled separately
                 if (key === 'remainingTime') return;
 
                 const value = logData1[key];
-                 const row = $('<tr>');
-                 var loggerKey = '';
-                 if(key == 'packageLogLevels') {
-                 loggerKey = 'Package Specific Logging Level';
-                 } else {
-                 loggerKey = 'Root Level';
-                 }
-                   row.append(
-                        $('<td>')
-                            .text(loggerKey)
-                    );
-
-                    row.append(
-                        $('<td>')
-                            .addClass('log-value-cell')
-                            .text(formatValue(value))
-                    );
-
-                    logEntries.append(row);
+                const row = $('<tr>');
+                const loggerKey = key == 'packageLogLevels' ? 'Package Specific Logging Level' : 'Root Level';
+                
+                row.append($('<td>').text(loggerKey));
+                row.append($('<td>').addClass('log-value-cell').text(formatValue(value)));
+                
+                logEntries.append(row);
             });
-        }
-
-        function formatKey(key) {
-            // Convert camelCase to Title Case with Spaces
-            return key
-                + ':';
         }
 
         function formatValue(value) {
@@ -358,22 +422,21 @@
             return value.toString();
         }
 
+        // Initial data load
         $(document).ready(function () {
-    // Define the API endpoint to fetch the log data
-    const apiEndpoint = '/api/log4j2.json';
+            $.get('/api/log4j2.json', function (response) {
+                if (response) {
+                    displayLogInfo(response);
+                }
+            }).fail(function (xhr, status, error) {
+                console.error('Error fetching log data:', error);
+            });
 
-    // Make an AJAX GET request to fetch the log data
-    $.get(apiEndpoint, function (response) {
-        if (response) {
-            // Populate the log information using the fetched data
-            displayLogInfo(response);
-        } else {
-            console.error('No log data received from the API.');
-        }
-    }).fail(function (xhr, status, error) {
-        console.error('Error fetching log data:', error);
-    });
-});
-
-</script>
+            $.get('/api/remaining-time', function(response) {
+                updateTimer(response.remainingTime);
+                displayLogInfo(response);
+            });
+        });
+    </script>
+</body>
 </html>
