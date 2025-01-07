@@ -138,14 +138,14 @@
         function usubmit() {
             const form = $('#configForm');
             const formData = new FormData(form[0]);
-            //const username =
+            const username = $('.user-name').text();
             const packageLogLevels = {};
 
             $('#packages .package-group').each(function() {
                     const packageName = $(this).find('input[name="packageName"]').val();
                     const logLevel = $(this).find('select[name="packageLevel"]').val();
                     if(packageName && logLevel) {
-                    packageLogLevels[packageName] = logLevel;
+                    packageLogLevels[packageName] = {logLevel: logLevel, userId: username};
                 }
             });
             formData.append('packageLogLevels', JSON.stringify(packageLogLevels));
@@ -187,10 +187,25 @@
 
                 const value = logData1[key];
                 const row = $('<tr>');
-                const loggerKey = key == 'packageLogLevels' ? 'Package Specific Logging Level' : 'Root Level';
-
+                const loggerKey = key == 'packageLogLevels' ? 'Package Logging Level' : 'Root Logging Level';
                 row.append($('<td>').text(loggerKey));
-                row.append($('<td>').addClass('log-value-cell').text(formatValue(value)));
+                const loggerKeys = Object.keys(value);
+                if(key == 'packageLogLevels') {
+                const col = $('<td>');
+                 loggerKeys.forEach(key1 => {
+                     const row1 = $('<tr>');
+                     const value1 = value[key1];
+                     row1.append($('<td>').addClass('log-value-cell').text(key1.concat(": ", value1.logLevel)));
+                     const userId = value1.userId || '';
+                     col.append(row1);
+                     row.append(col);
+                     row.append($('<td>').addClass('log-value-cell').text(formatValue(userId)));
+                 });
+                } else{
+                    const userId = value.rootLevel.userId || '';
+                    row.append($('<td>').addClass('log-value-cell').text(value.rootLevel.logLevel));
+                    row.append($('<td>').addClass('log-value-cell').text(formatValue(userId)));
+                }
 
                 logEntries.append(row);
             });
@@ -210,12 +225,6 @@
             // First promise for log data
             new Promise((resolve, reject) => {
                 $.get('/api/log4j2.json')
-                    .done(resolve)
-                    .fail(reject);
-            }),
-            // Second promise for remaining time
-            new Promise((resolve, reject) => {
-                $.get('/api/remaining-time')
                     .done(resolve)
                     .fail(reject);
             })
