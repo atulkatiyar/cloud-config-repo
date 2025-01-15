@@ -1,5 +1,123 @@
+.custom-popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Modal Container */
+.custom-popup-modal {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    animation: slideDown 0.3s ease-out;
+}
+
+/* Modal Header */
+.popup-header {
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.popup-header h3 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+/* Modal Body */
+.popup-body {
+    padding: 20px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.popup-body p {
+    margin: 0;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+/* Modal Footer */
+.popup-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Close Button */
+.close-popup-btn {
+    padding: 8px 20px;
+    border-radius: 4px;
+    border: none;
+    background: #6c757d;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.close-popup-btn:hover {
+    background: #5a6268;
+}
+
+/* Icons */
+.success-icon {
+    font-size: 24px;
+    color: #28a745;
+}
+
+.error-icon {
+    font-size: 24px;
+    color: #dc3545;
+}
+
+/* Success/Error Variants */
+.success .popup-header {
+    border-top: 4px solid #28a745;
+}
+
+.error .popup-header {
+    border-top: 4px solid #dc3545;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+
+
+<link href="/css/popup.css" rel="stylesheet">
+
+
+
+
 function showPopup(type, message) {
-    // First, remove any existing popup
+    // Remove any existing popup
     $('.custom-popup-overlay').remove();
 
     // Create overlay and popup elements
@@ -21,116 +139,6 @@ function showPopup(type, message) {
         </div>
     `);
 
-    // Add styles if not already present
-    if (!$('#popupStyles').length) {
-        $('head').append(`
-            <style id="popupStyles">
-                .custom-popup-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0, 0, 0, 0.5);
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    z-index: 1000;
-                    animation: fadeIn 0.3s ease-out;
-                }
-
-                .custom-popup-modal {
-                    background: white;
-                    border-radius: 8px;
-                    width: 90%;
-                    max-width: 500px;
-                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-                    animation: slideDown 0.3s ease-out;
-                }
-
-                .popup-header {
-                    padding: 20px;
-                    border-bottom: 1px solid #eee;
-                    display: flex;
-                    align-items: center;
-                    gap: 15px;
-                }
-
-                .popup-header h3 {
-                    margin: 0;
-                    font-size: 1.5rem;
-                }
-
-                .popup-body {
-                    padding: 20px;
-                    max-height: 60vh;
-                    overflow-y: auto;
-                }
-
-                .popup-body p {
-                    margin: 0;
-                    line-height: 1.5;
-                    white-space: pre-wrap;
-                }
-
-                .popup-footer {
-                    padding: 15px 20px;
-                    border-top: 1px solid #eee;
-                    display: flex;
-                    justify-content: flex-end;
-                }
-
-                .close-popup-btn {
-                    padding: 8px 20px;
-                    border-radius: 4px;
-                    border: none;
-                    background: #6c757d;
-                    color: white;
-                    cursor: pointer;
-                    transition: background 0.2s;
-                }
-
-                .close-popup-btn:hover {
-                    background: #5a6268;
-                }
-
-                .success-icon {
-                    font-size: 24px;
-                    color: #28a745;
-                }
-
-                .error-icon {
-                    font-size: 24px;
-                    color: #dc3545;
-                }
-
-                .success .popup-header {
-                    border-top: 4px solid #28a745;
-                }
-
-                .error .popup-header {
-                    border-top: 4px solid #dc3545;
-                }
-
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-
-                @keyframes slideDown {
-                    from {
-                        transform: translateY(-50px);
-                        opacity: 0;
-                    }
-                    to {
-                        transform: translateY(0);
-                        opacity: 1;
-                    }
-                }
-            </style>
-        `);
-    }
-
     // Add popup to overlay and overlay to document
     overlay.append(popup);
     $('body').append(overlay);
@@ -142,7 +150,7 @@ function showPopup(type, message) {
         });
     });
 
-    // Close on overlay click (optional)
+    // Close on overlay click
     overlay.on('click', function(e) {
         if (e.target === this) {
             $(this).fadeOut(300, function() {
@@ -150,57 +158,4 @@ function showPopup(type, message) {
             });
         }
     });
-}
-
-// Modify the usubmit() function's error handling
-function usubmit() {
-    const form = $('#configForm');
-    const formData = new FormData(form[0]);
-    const username = $('.user-name').text();
-    const packageLogLevels = {};
-
-    $('#packages .package-group').each(function() {
-        const packageName = $(this).find('input[name="packageName"]').val();
-        const logLevel = $(this).find('select[name="packageLevel"]').val();
-        if(packageName && logLevel) {
-            packageLogLevels[packageName] = {logLevel: logLevel, userId: username};
-        }
-    });
-
-    const rootLevel = $('#rootLevel').val();
-    
-    $.ajax({
-        url: '/log4j2',
-        type: 'POST',
-        data: {
-            rootLevel: rootLevel,
-            packageLogLevels: JSON.stringify(packageLogLevels)
-        },
-        success: function(response) {
-            if (response === true) {
-                showPopup('success', 'Configuration has been successfully updated!\n\nYour changes have been applied and the logging system has been reconfigured.');
-                // Continue with existing logic
-                displayLogInfo(response);
-                if (response.remainingTime !== undefined) {
-                    updateTimer(response.remainingTime);
-                }
-            } else {
-                showPopup('error', 'Failed to update configuration\n\nPossible reasons:\n• Invalid log level configuration\n• System permission issues\n• Server connection problems\n\nPlease verify your settings and try again.');
-            }
-        },
-        error: function(xhr, status, error) {
-            let errorMessage = 'An error occurred while updating the configuration\n\n';
-            errorMessage += `Status: ${status}\n`;
-            errorMessage += `Error: ${error}\n`;
-            
-            if (xhr.responseJSON && xhr.responseJSON.message) {
-                errorMessage += `\nDetails: ${xhr.responseJSON.message}`;
-            }
-            
-            showPopup('error', errorMessage);
-            console.error('Error:', error);
-        }
-    });
-
-    return false;
 }
