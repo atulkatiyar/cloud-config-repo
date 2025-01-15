@@ -1,161 +1,337 @@
-.custom-popup-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    animation: fadeIn 0.3s ease-out;
-}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Log4j Configuration Dashboard</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+<div class="dashboard-header">
+    <h1 class="dashboard-title">Log4j Configuration Dashboard</h1>
+    <div class="user-section">
+        <span class="user-name" sec:authentication="name"></span>
+        <form th:action="@{/logout}" method="post" class="d-inline">
+            <button type="submit" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </form>
+    </div>
+</div>
 
-/* Modal Container */
-.custom-popup-modal {
-    background: white;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 500px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    animation: slideDown 0.3s ease-out;
-}
+<form id="configForm" class="config-card" action="/api/log4j2.xml" method="post" onsubmit="return usubmit()">
+    <!--<div class="form-group">
+        <h3 class="section-title">Root Log Level</h3>
+        <select name="rootLevel" id="rootLevel" class="form-select">
+            <option value="WARN">WARN</option>
+            <option value="FATAL">FATAL</option>
+            <option value="ERROR">ERROR</option>
+            <option value="INFO">INFO</option>
+            <option value="DEBUG">DEBUG</option>
+            <option value="TRACE">TRACE</option>
+        </select>
+    </div>-->
 
-/* Modal Header */
-.popup-header {
-    padding: 20px;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
+    <div class="form-group">
+        <h3 class="section-title">Package-Specific Log Levels</h3>
+        <button type="button" class="add-package-btn" onclick="addPackage()">
+            <i class="fas fa-plus"></i> Add Package
+        </button>
+        <div id="packages"></div>
+    </div>
 
-.popup-header h3 {
-    margin: 0;
-    font-size: 1.5rem;
-}
-
-/* Modal Body */
-.popup-body {
-    padding: 20px;
-    max-height: 60vh;
-    overflow-y: auto;
-}
-
-.popup-body p {
-    margin: 0;
-    line-height: 1.5;
-    white-space: pre-wrap;
-}
-
-/* Modal Footer */
-.popup-footer {
-    padding: 15px 20px;
-    border-top: 1px solid #eee;
-    display: flex;
-    justify-content: flex-end;
-}
-
-/* Close Button */
-.close-popup-btn {
-    padding: 8px 20px;
-    border-radius: 4px;
-    border: none;
-    background: #6c757d;
-    color: white;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.close-popup-btn:hover {
-    background: #5a6268;
-}
-
-/* Icons */
-.success-icon {
-    font-size: 24px;
-    color: #28a745;
-}
-
-.error-icon {
-    font-size: 24px;
-    color: #dc3545;
-}
-
-/* Success/Error Variants */
-.success .popup-header {
-    border-top: 4px solid #28a745;
-}
-
-.error .popup-header {
-    border-top: 4px solid #dc3545;
-}
-
-/* Animations */
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes slideDown {
-    from {
-        transform: translateY(-50px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-
-
-<link href="/css/popup.css" rel="stylesheet">
-
-
-
-
-function showPopup(type, message) {
-    // Remove any existing popup
-    $('.custom-popup-overlay').remove();
-
-    // Create overlay and popup elements
-    const overlay = $('<div>').addClass('custom-popup-overlay');
-    const popup = $(`
-        <div class="custom-popup-modal ${type}">
-            <div class="popup-header">
-                ${type === 'success' 
-                    ? '<i class="fas fa-check-circle success-icon"></i><h3>Success</h3>'
-                    : '<i class="fas fa-exclamation-circle error-icon"></i><h3>Error</h3>'
-                }
-            </div>
-            <div class="popup-body">
-                <p>${message}</p>
-            </div>
-            <div class="popup-footer">
-                <button class="close-popup-btn">Close</button>
-            </div>
+    <div class="form-group">
+        <h3 class="section-title">Log Level Duration</h3>
+        <select name="timer" id="timer" class="form-select">
+            <option value="" disabled selected>Please select a time</option>
+            <option value="60">1 minute</option>
+            <option value="120">2 minutes</option>
+            <option value="300">5 minutes</option>
+            <option value="1800">30 minutes</option>
+            <option value="72000">120 minutes</option>
+        </select>
+        <div class="timer-container">
+            <i class="fas fa-clock"></i>
+            <span id="countdown">00:00:00</span>
         </div>
-    `);
+    </div>
 
-    // Add popup to overlay and overlay to document
-    overlay.append(popup);
-    $('body').append(overlay);
+    <button type="submit" class="submit-btn">
+        <i class="fas fa-cog"></i> Set Logging Config
+    </button>
+</form>
 
-    // Handle close button click
-    $('.close-popup-btn').on('click', function() {
-        overlay.fadeOut(300, function() {
-            $(this).remove();
+<div id="logContainer" class="log-container" style="display: none;">
+    <h3 class="section-title">Logging Information</h3>
+    <table class="log-table" id="logEntries">
+        <thead>
+        <tr>
+            <th>Property</th>
+            <th>Value</th>
+            <th>Remaining Time(sec)</th>
+            <th>User</th>
+        </tr>
+        </thead>
+        <tbody id="logTableBody">
+        </tbody>
+    </table>
+</div>
+
+<script>
+        let timerId;
+
+        function addPackage() {
+            const packageDiv = document.createElement('div');
+            packageDiv.className = 'package-group';
+            packageDiv.innerHTML = `
+                <div class="form-group">
+                    <label class="form-label">Package Name:</label>
+                    <input type="text" name="packageName" class="form-input" placeholder="e.g., com.example"/>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Log Level:</label>
+                    <select name="packageLevel" class="form-select">
+                        <option value="WARN">WARN</option>
+                        <option value="FATAL">FATAL</option>
+                        <option value="ERROR">ERROR</option>
+                        <option value="INFO">INFO</option>
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="TRACE">TRACE</option>
+                    </select>
+                </div>
+            `;
+            document.getElementById('packages').appendChild(packageDiv);
+        }
+
+        // Add initial package group
+        addPackage();
+
+        function updateTimer(remainingMs) {
+            clearInterval(timerId);
+
+            if (remainingMs <= 0) {
+                $('#countdown').text('00:00:00');
+                return;
+            }
+
+            function displayTime() {
+                const hours = Math.floor(remainingMs / 3600000);
+                const minutes = Math.floor((remainingMs % 3600000) / 60000);
+                const seconds = Math.floor((remainingMs % 60000) / 1000);
+
+                $('#countdown').text(
+                    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+                );
+
+                remainingMs -= 1000;
+
+                if (remainingMs < 0) {
+                    clearInterval(timerId);
+                    $('#countdown').text('00:00:00');
+                }
+            }
+
+            displayTime();
+            timerId = setInterval(displayTime, 1000);
+        }
+
+        function usubmit() {
+            const form = $('#configForm');
+            const formData = new FormData(form[0]);
+            const username = $('.user-name').text();
+            const packageLogLevels = {};
+
+            $('#packages .package-group').each(function() {
+                    const packageName = $(this).find('input[name="packageName"]').val();
+                    const logLevel = $(this).find('select[name="packageLevel"]').val();
+                    if(packageName && logLevel) {
+                    packageLogLevels[packageName] = {logLevel: logLevel, userId: username};
+                }
+            });
+            formData.append('packageLogLevels', JSON.stringify(packageLogLevels));
+
+            $.ajax({
+                url: '/api/log4j2',
+                type: 'POST',
+                data: {
+                    packageLogLevels: JSON.stringify(packageLogLevels)
+            },
+            success: function(response) {
+                if (response === true) {
+                    // Show error popup
+                    showPopup('error', 'Failed to update Log Level. Log Level has been updated by some other user. Please try after sometime.');
+                } else {
+                    // Show success popup
+                    showPopup('success', 'Configuration updated successfully!');
+                                $.ajax({
+                                    url: form.attr('action'),
+                                    type: 'PUT',
+                                    data: formData,
+                                    processData: false,
+                                    contentType: false,
+                                    success: function(response) {
+                                        displayLogInfo(response);
+                                        if (response.remainingTime !== undefined) {
+                                            updateTimer(response.remainingTime);
+                                        }
+
+                                    },
+                                    error: function(xhr, status, error) {
+                                        console.error('Error:', error);
+                                    }
+                                });
+                }
+            },
+            error: function(xhr, status, error) {
+                showPopup('error', 'An error occurred: ' + error);
+                console.error('Error:', error);
+            }
+        });
+            return false;
+        }
+
+        function displayLogInfo(logData) {
+            const logEntries = $('#logTableBody');
+            logEntries.empty();
+
+            const logData1 = logData.data;
+            if(Object.keys(logData1).length == 0) {
+                $('#logContainer').hide();
+                return;
+            }
+
+            const currTime = logData.currentTime;
+
+            $('#logContainer').show();
+            const sortedKeys = Object.keys(logData1).sort();
+
+            sortedKeys.forEach(key => {
+                if (key === 'remainingTime') return;
+
+                const value = logData1[key];
+                const row = $('<tr>');
+                const loggerKey = key == 'packageLogLevels' ? 'Package Logging Level' : 'Root Logging Level';
+                row.append($('<td>').text(loggerKey));
+                const loggerKeys = Object.keys(value);
+                var user_id = '';
+                if(key == 'packageLogLevels') {
+                const col = $('<td>');
+                const col2 = $('<td>');
+                const col3 = $('<td>');
+                 loggerKeys.forEach(key1 => {
+
+                     const row1 = $('<tr>');
+                     const row2 = $('<tr>');
+                     const row3 = $('<tr>');
+                     const value1 = value[key1];
+                     row1.append($('<td>').addClass('log-value-cell').text(key1.concat(": ", value1.logLevel)));
+                     const endTime = value1.timer.endTime;
+                     const diffInSeconds = ~~((endTime - currTime) / 1000);
+                     if(diffInSeconds > 0) {
+                        row2.append($('<td>').addClass('log-value-cell').text(diffInSeconds));
+                     } else{
+                        row2.append($('<td>').addClass('log-value-cell').text(''));
+                     }
+                     const userId = value1.userId || '';
+                     col.append(row1);
+                     col2.append(row2);
+                     row.append(col);
+                     row.append(col2);
+                     row3.append($('<td>').addClass('log-value-cell').text(formatValue(userId)));
+
+                     col3.append(row3);
+                     row.append(col3);
+
+                 });
+                } else{
+                    const userId = value.rootLevel.userId || '';
+                    row.append($('<td>').addClass('log-value-cell').text(value.rootLevel.logLevel));
+                    const endTime = value.rootLevel.timer.endTime ;
+                     const diffInSeconds = ~~((endTime - currTime) / 1000);
+                     if(diffInSeconds > 0) {
+                        row.append($('<td>').addClass('log-value-cell').text(diffInSeconds));
+                     } else{
+                        row.append($('<td>').addClass('log-value-cell').text(''));
+                     }
+                    row.append($('<td>').addClass('log-value-cell').text(formatValue(userId)));
+                }
+
+                logEntries.append(row);
+            });
+        }
+
+        function formatValue(value) {
+            if (value === null) return 'N/A';
+            if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+            if (typeof value === 'object') return JSON.stringify(value, null, 2);
+            return value.toString();
+        }
+
+        // Initial data load
+        $(document).ready(function () {
+        // Load both the log data and remaining time in a synchronized way
+        Promise.all([
+            // First promise for log data
+            new Promise((resolve, reject) => {
+                $.get('/api/log4j2.json')
+                    .done(resolve)
+                    .fail(reject);
+            })
+        ])
+        .then(([logResponse, timerResponse]) => {
+            // Update timer first
+            if (timerResponse && timerResponse.remainingTime !== undefined) {
+                updateTimer(timerResponse.remainingTime);
+            }
+
+            // Then display log info
+            if (logResponse) {
+                console.log('Displaying log info:', logResponse); // Debug log
+                displayLogInfo(logResponse);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading initial data:', error);
         });
     });
 
-    // Close on overlay click
-    overlay.on('click', function(e) {
-        if (e.target === this) {
-            $(this).fadeOut(300, function() {
+
+    function showPopup(type, message) {
+        $('.custom-popup-overlay').remove();
+        const overlay = $('<div>').addClass('custom-popup-overlay');
+        const popup = $(`
+            <div class="custom-popup-modal ${type}">
+                <div class="popup-header">
+                    ${type === 'success'
+                        ? '<i class="fas fa-check-circle success-icon"></i><h3>Success</h3>'
+                        : '<i class="fas fa-exclamation-circle error-icon"></i><h3>Error</h3>'
+                    }
+                </div>
+                <div class="popup-body">
+                    <p>${message}</p>
+                </div>
+                <div class="popup-footer">
+                    <button class="close-popup-btn">Close</button>
+                </div>
+            </div>
+        `);
+
+        overlay.append(popup);
+        $('body').append(overlay);
+        $('.close-popup-btn').on('click', function() {
+            overlay.fadeOut(300, function() {
                 $(this).remove();
             });
-        }
-    });
-}
+        });
+        overlay.on('click', function(e) {
+            if (e.target === this) {
+                $(this).fadeOut(300, function() {
+                    $(this).remove();
+                });
+            }
+        });
+    }
+    </script>
+</body>
+</html>
