@@ -1,3 +1,8 @@
+Restoring an Amazon RDS Aurora database backup from one AWS account to another can be done effectively while ensuring no data is lost. Here’s the best approach to achieve this:
+
+
+
+
 In the context of Amazon RDS, the retention period of 7 days means the following:
 
 Automated Backups:
