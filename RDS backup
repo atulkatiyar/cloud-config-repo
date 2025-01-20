@@ -30,6 +30,7 @@ Since Aurora backs up data continuously, you can perform Point-in-Time Recovery 
 If you need a specific backup at a particular time, you can create a manual snapshot. Manual snapshots are user-initiated and not automatically managed by the retention period. They will remain in your account until you delete them
 
 Automated backups are not explicitly tied to a user-accessible S3 bucket. Instead, AWS uses S3 internally to store these backups, and the user doesn't have direct access to the bucket storing the snapshot.
+The snapshot is stored in AWS-managed S3 storage, and you cannot directly view or access it in an S3 bucket. AWS handles the storage and retrieval of the snapshots, ensuring durability and availability.
 
 .
 1. Enable Cross-Account Snapshot Sharing
