@@ -1,140 +1,43 @@
-package com.lseg.ipps.solutions.tpl.controller;
-
-import com.lseg.ipps.solutions.tpl.cache.Log4JCache;
-import com.lseg.ipps.solutions.tpl.model.Timer;
-import com.lseg.ipps.solutions.tpl.model.TimerResponse;
-import com.lseg.ipps.solutions.tpl.service.LoggingLevelService;
-import freemarker.template.Configuration;
-import freemarker.template.Template;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.ui.freemarker.FreeMarkerConfigurationFactoryBean;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-class LogConfigControllerTest {
-
-    @Mock
-    private LoggingLevelService loggingLevelService;
-    
-    @Mock
-    private FreeMarkerConfigurationFactoryBean freemarkerConfig;
-    
-    @Mock
-    private Configuration configuration;
-    
-    @Mock
-    private Template template;
-    
-    @InjectMocks
-    private LogConfigController controller;
-    
-    private Log4JCache log4JCache;
-
-    @BeforeEach
-    void setUp() {
-        log4JCache = mock(Log4JCache.class);
-    }
-
-    @Test
-    void showDashboard_ReturnsCorrectView() {
-        String result = controller.showDashboard();
-        assertEquals("log-level-controller", result);
-    }
-
-    @Test
-    void generateLog4j_CreatesNewConfiguration() {
-        try (MockedStatic<Log4JCache> mockedStatic = mockStatic(Log4JCache.class)) {
-            String rootLevel = "INFO";
-            String packageName = "com.example";
-            String packageLevel = "DEBUG";
-            String timer = "60";
-            
-            mockedStatic.when(() -> Log4JCache.getInstance(any(TimeUnit.class), anyLong()))
-                    .thenReturn(log4JCache);
-            when(loggingLevelService.getRemainingTime()).thenReturn(60000L);
-            when(log4JCache.get(LogConfigController.LOG4J_CONFIG_CACHE_KEY))
-                    .thenReturn(new HashMap<String, Object>());
-            
-            ResponseEntity<TimerResponse> response = controller.generateLog4j(
-                rootLevel, packageName, packageLevel, timer
-            );
-            
-            assertNotNull(response);
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            verify(log4JCache, times(2)).put(anyString(), any());
-            verify(loggingLevelService).getRemainingTime();
-        }
-    }
-
-    @Test
-    void getLog4jData_WhenCacheIsNull_ReturnsDefaultData() {
-        try (MockedStatic<Log4JCache> mockedStatic = mockStatic(Log4JCache.class)) {
-            mockedStatic.when(Log4JCache::checkIfLog4JCacheIsNull).thenReturn(true);
-            
-            ResponseEntity<TimerResponse> response = controller.getLog4jData();
-            
-            assertNotNull(response);
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            TimerResponse timerResponse = response.getBody();
-            assertNotNull(timerResponse);
-            assertEquals(0, timerResponse.remainingTime());
-            assertEquals("WARN", timerResponse.data().get("rootLevel"));
-        }
-    }
-
-    @Test
-    void clearExistingLogging_WhenCacheExists_ClearsCache() {
-        try (MockedStatic<Log4JCache> mockedStatic = mockStatic(Log4JCache.class)) {
-            mockedStatic.when(Log4JCache::checkIfLog4JCacheIsNull).thenReturn(false);
-            mockedStatic.when(() -> Log4JCache.getInstance(any(TimeUnit.class), anyLong()))
-                    .thenReturn(log4JCache);
-            
-            ResponseEntity<Object> response = controller.clearExistingLogging();
-            
-            assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-            verify(log4JCache).clearAll(LogConfigController.LOG4J_CONFIG_CACHE_KEY);
-        }
-    }
-
-    @Test
-    void getRemainingTime_ReturnsCorrectResponse() {
-        when(loggingLevelService.getRemainingTime()).thenReturn(5000L);
+@Test
+    void removeExpiredEntries_RemovesExpiredEntry() throws InterruptedException {
+        // Set up cache with a very short expiration time
+        cache = Log4JCache.getInstance(TimeUnit.MILLISECONDS, 100);
+        cache.put(TEST_KEY, TEST_VALUE);
         
-        ResponseEntity<TimerResponse> response = controller.getRemainingTime();
+        // Wait for the entry to expire
+        Thread.sleep(200);
         
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        TimerResponse timerResponse = response.getBody();
-        assertNotNull(timerResponse);
-        assertEquals(5000L, timerResponse.remainingTime());
+        // Try to get the expired entry
+        assertNull(cache.get(TEST_KEY), "Entry should have been removed after expiration");
     }
 
     @Test
-    void generateLog4jXml_WithDefaultConfig_ReturnsXmlContent() throws Exception {
-        try (MockedStatic<Log4JCache> mockedStatic = mockStatic(Log4JCache.class)) {
-            mockedStatic.when(Log4JCache::checkIfLog4JCacheIsNull).thenReturn(true);
-            when(freemarkerConfig.createConfiguration()).thenReturn(configuration);
-            when(configuration.getTemplate(anyString())).thenReturn(template);
-            
-            ResponseEntity<String> response = controller.generateLog4jXml();
-            
-            assertNotNull(response);
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-        }
+    void removeExpiredEntries_RetainsValidEntry() throws InterruptedException {
+        // Set up cache with a longer expiration time
+        cache = Log4JCache.getInstance(TimeUnit.SECONDS, 2);
+        cache.put(TEST_KEY, TEST_VALUE);
+        
+        // Wait for a short time, but not long enough for expiration
+        Thread.sleep(500);
+        
+        // Entry should still be present
+        assertEquals(TEST_VALUE, cache.get(TEST_KEY), "Entry should still be present before expiration");
     }
-}
+
+    @Test
+    void removeExpiredEntries_HandlesMultipleEntries() throws InterruptedException {
+        // Set up cache with different expiration times
+        cache = Log4JCache.getInstance(TimeUnit.MILLISECONDS, 200);
+        
+        // Add multiple entries
+        cache.put("short-lived", "expire-soon");
+        Thread.sleep(100);
+        cache.put("long-lived", "expire-later");
+        
+        // Wait for first entry to expire
+        Thread.sleep(150);
+        
+        // Check results
+        assertNull(cache.get("short-lived"), "Short-lived entry should have expired");
+        assertNotNull(cache.get("long-lived"), "Long-lived entry should still be present");
+    }
