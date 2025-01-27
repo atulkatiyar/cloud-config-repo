@@ -1,88 +1,182 @@
+package com.lseg.ipps.solutions.shared.agent;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.lang.instrument.Instrumentation;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
 class LogLevelStartUpAgentTest {
 
-    @Test
-    void testFetchUpdatedLog4jXmlSuccess() throws Exception {
+    private static final String TEST_HOST = "http://test-host";
+    private static final String TEST_DURATION = "20";
+    private HttpURLConnection mockConnection;
+    private URL mockUrl;
+    private File mockFile;
+    private FileOutputStream mockFileOutputStream;
+    private ScheduledExecutorService mockExecutor;
+    private Instrumentation mockInstrumentation;
+
+    @BeforeEach
+    void setUp() throws Exception {
         // Mock System properties
-        try (MockedStatic<System> systemMock = mockStatic(System.class)) {
-            systemMock.when(() -> System.getProperty("log.level.controller.host"))
-                    .thenReturn("http://mocked-host");
+        System.setProperty(LogLevelStartUpAgent.LOG_LEVEL_CONTROLLER_HOST, TEST_HOST);
+        System.setProperty(LogLevelStartUpAgent.LOG_LEVEL_CHANGES_DURATION, TEST_DURATION);
 
-            // Mock URL and HttpURLConnection
-            HttpURLConnection mockConnection = mock(HttpURLConnection.class);
-            URL mockUrl = mock(URL.class);
+        // Initialize mocks
+        mockConnection = mock(HttpURLConnection.class);
+        mockUrl = mock(URL.class);
+        mockFile = mock(File.class);
+        mockFileOutputStream = mock(FileOutputStream.class);
+        mockExecutor = mock(ScheduledExecutorService.class);
+        mockInstrumentation = mock(Instrumentation.class);
+    }
 
-            when(mockUrl.openConnection()).thenReturn(mockConnection);
-            when(mockConnection.getResponseCode()).thenReturn(200);
-            when(mockConnection.getInputStream()).thenReturn(new ByteArrayInputStream("mocked-xml-content".getBytes()));
+    @AfterEach
+    void tearDown() {
+        System.clearProperty(LogLevelStartUpAgent.LOG_LEVEL_CONTROLLER_HOST);
+        System.clearProperty(LogLevelStartUpAgent.LOG_LEVEL_CHANGES_DURATION);
+    }
 
+    @Test
+    void premain_SuccessfulInitialization() throws Exception {
+        try (MockedStatic<Executors> executorsMock = mockStatic(Executors.class)) {
+            // Mock executor service creation
+            executorsMock.when(() -> Executors.newScheduledThreadPool(1))
+                    .thenReturn(mockExecutor);
+
+            // Mock successful HTTP connection
             try (MockedStatic<URL> urlMock = mockStatic(URL.class)) {
-                urlMock.when(() -> new URL("http://mocked-host/log4j2.xml"))
-                        .thenReturn(mockUrl);
+                urlMock.when(() -> new URL(anyString())).thenReturn(mockUrl);
+                when(mockUrl.openConnection()).thenReturn(mockConnection);
+                when(mockConnection.getResponseCode()).thenReturn(200);
+                when(mockConnection.getInputStream())
+                    .thenReturn(new ByteArrayInputStream("test content".getBytes()));
 
-                // Call the method
-                LogLevelStartUpAgent.fetchUpdatedLog4jXml();
+                // Execute premain
+                LogLevelStartUpAgent.premain(null, mockInstrumentation);
 
-                // Verify
-                verify(mockConnection).setRequestProperty("Accept", "application/xml");
-                verify(mockConnection).setRequestMethod("GET");
-                verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
-                verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
-
-                // Check if the file is created
-                File outputFile = new File("log4j2.xml");
-                assertTrue(outputFile.exists());
-                outputFile.delete(); // Clean up after test
+                // Verify scheduler setup
+                verify(mockExecutor).scheduleAtFixedRate(
+                    any(Runnable.class),
+                    eq(Long.parseLong(TEST_DURATION)),
+                    eq(Long.parseLong(TEST_DURATION)),
+                    eq(TimeUnit.SECONDS)
+                );
             }
         }
     }
 
     @Test
-    void testFetchUpdatedLog4jXmlErrorResponse() throws Exception {
-        // Mock System properties
-        try (MockedStatic<System> systemMock = mockStatic(System.class)) {
-            systemMock.when(() -> System.getProperty("log.level.controller.host"))
-                    .thenReturn("http://mocked-host");
+    void premain_WithInvalidDuration_UsesDefaultValue() throws Exception {
+        // Set invalid duration
+        System.setProperty(LogLevelStartUpAgent.LOG_LEVEL_CHANGES_DURATION, "invalid");
 
-            // Mock URL and HttpURLConnection
-            HttpURLConnection mockConnection = mock(HttpURLConnection.class);
-            URL mockUrl = mock(URL.class);
-
-            when(mockUrl.openConnection()).thenReturn(mockConnection);
-            when(mockConnection.getResponseCode()).thenReturn(500);
+        try (MockedStatic<Executors> executorsMock = mockStatic(Executors.class)) {
+            executorsMock.when(() -> Executors.newScheduledThreadPool(1))
+                    .thenReturn(mockExecutor);
 
             try (MockedStatic<URL> urlMock = mockStatic(URL.class)) {
-                urlMock.when(() -> new URL("http://mocked-host/log4j2.xml"))
-                        .thenReturn(mockUrl);
+                urlMock.when(() -> new URL(anyString())).thenReturn(mockUrl);
+                when(mockUrl.openConnection()).thenReturn(mockConnection);
+                when(mockConnection.getResponseCode()).thenReturn(200);
+                when(mockConnection.getInputStream())
+                    .thenReturn(new ByteArrayInputStream("test content".getBytes()));
 
-                // Call the method
-                LogLevelStartUpAgent.fetchUpdatedLog4jXml();
+                LogLevelStartUpAgent.premain(null, mockInstrumentation);
 
-                // Verify
-                verify(mockConnection).setRequestProperty("Accept", "application/xml");
-                verify(mockConnection).setRequestMethod("GET");
-                verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
-                verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
-
-                // Check that no file is created
-                File outputFile = new File("log4j2.xml");
-                assertFalse(outputFile.exists());
+                // Verify scheduler uses default duration
+                verify(mockExecutor).scheduleAtFixedRate(
+                    any(Runnable.class),
+                    eq((long) LogLevelStartUpAgent.LOG_LEVEL_CHANGES_DURATION_DEFAULT),
+                    eq((long) LogLevelStartUpAgent.LOG_LEVEL_CHANGES_DURATION_DEFAULT),
+                    eq(TimeUnit.SECONDS)
+                );
             }
         }
     }
 
     @Test
-    void testFetchUpdatedLog4jXmlInvalidHost() {
-        // Mock System properties
-        try (MockedStatic<System> systemMock = mockStatic(System.class)) {
-            systemMock.when(() -> System.getProperty("log.level.controller.host"))
-                    .thenReturn(null);
+    void premain_WithHttpError_HandlesException() throws Exception {
+        try (MockedStatic<Executors> executorsMock = mockStatic(Executors.class)) {
+            executorsMock.when(() -> Executors.newScheduledThreadPool(1))
+                    .thenReturn(mockExecutor);
 
-            // Call the method
-            LogLevelStartUpAgent.fetchUpdatedLog4jXml();
+            try (MockedStatic<URL> urlMock = mockStatic(URL.class)) {
+                urlMock.when(() -> new URL(anyString())).thenReturn(mockUrl);
+                when(mockUrl.openConnection()).thenReturn(mockConnection);
+                when(mockConnection.getResponseCode()).thenReturn(404);
 
-            // Check that no file is created
-            File outputFile = new File("log4j2.xml");
-            assertFalse(outputFile.exists());
+                LogLevelStartUpAgent.premain(null, mockInstrumentation);
+
+                // Verify scheduler is still set up despite HTTP error
+                verify(mockExecutor).scheduleAtFixedRate(
+                    any(Runnable.class),
+                    anyLong(),
+                    anyLong(),
+                    eq(TimeUnit.SECONDS)
+                );
+            }
+        }
+    }
+
+    @Test
+    void premain_WithConnectionError_HandlesException() throws Exception {
+        try (MockedStatic<Executors> executorsMock = mockStatic(Executors.class)) {
+            executorsMock.when(() -> Executors.newScheduledThreadPool(1))
+                    .thenReturn(mockExecutor);
+
+            try (MockedStatic<URL> urlMock = mockStatic(URL.class)) {
+                urlMock.when(() -> new URL(anyString())).thenReturn(mockUrl);
+                when(mockUrl.openConnection()).thenThrow(new java.net.ConnectException("Connection refused"));
+
+                LogLevelStartUpAgent.premain(null, mockInstrumentation);
+
+                // Verify scheduler is still set up despite connection error
+                verify(mockExecutor).scheduleAtFixedRate(
+                    any(Runnable.class),
+                    anyLong(),
+                    anyLong(),
+                    eq(TimeUnit.SECONDS)
+                );
+            }
+        }
+    }
+
+    @Test
+    void premain_WithMissingHostProperty_HandlesException() throws Exception {
+        // Remove host property
+        System.clearProperty(LogLevelStartUpAgent.LOG_LEVEL_CONTROLLER_HOST);
+
+        try (MockedStatic<Executors> executorsMock = mockStatic(Executors.class)) {
+            executorsMock.when(() -> Executors.newScheduledThreadPool(1))
+                    .thenReturn(mockExecutor);
+
+            LogLevelStartUpAgent.premain(null, mockInstrumentation);
+
+            // Verify scheduler is still set up despite missing property
+            verify(mockExecutor).scheduleAtFixedRate(
+                any(Runnable.class),
+                anyLong(),
+                anyLong(),
+                eq(TimeUnit.SECONDS)
+            );
         }
     }
 }
