@@ -1,110 +1,79 @@
-@Test
-    void removeExpiredEntries_RemovesExpiredEntry() throws InterruptedException {
-        // Set up cache with a very short expiration time
-        cache = Log4JCache.getInstance(TimeUnit.MILLISECONDS, 100);
-        cache.put(TEST_KEY, TEST_VALUE);
-        
-        // Wait for the entry to expire
-        Thread.sleep(200);
-        
-        // Try to get the expired entry
-        assertNull(cache.get(TEST_KEY), "Entry should have been removed after expiration");
-    }
+package com.lseg.ipps.solutions.shared.agent;
 
-    @Test
-    void removeExpiredEntries_RetainsValidEntry() throws InterruptedException {
-        // Set up cache with a longer expiration time
-        cache = Log4JCache.getInstance(TimeUnit.SECONDS, 2);
-        cache.put(TEST_KEY, TEST_VALUE);
-        
-        // Wait for a short time, but not long enough for expiration
-        Thread.sleep(500);
-        
-        // Entry should still be present
-        assertEquals(TEST_VALUE, cache.get(TEST_KEY), "Entry should still be present before expiration");
-    }
 
-    @Test
-    void removeExpiredEntries_HandlesMultipleEntries() throws InterruptedException {
-        // Set up cache with different expiration times
-        cache = Log4JCache.getInstance(TimeUnit.MILLISECONDS, 200);
-        
-        // Add multiple entries
-        cache.put("short-lived", "expire-soon");
-        Thread.sleep(100);
-        cache.put("long-lived", "expire-later");
-        
-        // Wait for first entry to expire
-        Thread.sleep(150);
-        
-        // Check results
-        assertNull(cache.get("short-lived"), "Short-lived entry should have expired");
-        assertNotNull(cache.get("long-lived"), "Long-lived entry should still be present");
-    }
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.lang.instrument.Instrumentation;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.time.Instant;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-    @Test
-    void removeExpiredEntries_HandlesEmptyCache() throws InterruptedException {
-        // Set up cache with a short expiration time
-        cache = Log4JCache.getInstance(TimeUnit.MILLISECONDS, 100);
-        
-        // Wait for some time
-        Thread.sleep(200);
-        
-        // Verify no exceptions are thrown when cache is empty
-        assertNull(cache.get(TEST_KEY));
-    }
+public class LogLevelStartUpAgent {
 
-    @Test
-    void removeExpiredEntries_HandlesNullTimestamp() throws InterruptedException {
-        // Set up cache with a short expiration time
-        cache = Log4JCache.getInstance(TimeUnit.MILLISECONDS, 100);
-        
-        // Directly add a value to cache without timestamp (simulating edge case)
-        cache.put(TEST_KEY, TEST_VALUE);
-        // Force remove the timestamp
-        cache.clearAll(TEST_KEY);
-        cache.put(TEST_KEY, TEST_VALUE);
-        
-        // Wait for expiration time
-        Thread.sleep(200);
-        
-        // Entry should still be present as timestamp was null
-        assertNull(cache.get(TEST_KEY), "Entry should be removed even with null timestamp");
-    }
+    public static final int TIMEOUT = 15000;
+    public static final String LOG_LEVEL_CHANGES_DURATION = "log.level.changes.duration";
+    public static final int LOG_LEVEL_CHANGES_DURATION_DEFAULT = 10;
+    public static final String LOG4J2_XML_FILE_NAME = "log4j2.xml";
+    public static final String LOG_LEVEL_CONTROLLER_HOST = "log.level.controller.host";
 
-    @Test
-    void removeExpiredEntries_HandlesRapidPutAndRemove() throws InterruptedException {
-        cache = Log4JCache.getInstance(TimeUnit.MILLISECONDS, 100);
-        
-        // Rapidly add and remove entries
-        for (int i = 0; i < 10; i++) {
-            cache.put(TEST_KEY + i, TEST_VALUE);
-            if (i % 2 == 0) {
-                cache.clearAll(TEST_KEY + i);
+    /**
+     * Method to check if there is any update on logging config via Java Instrumentation Agent
+     * @param agentArgs
+     * @param inst
+     */
+    public static void premain(String agentArgs, Instrumentation inst) {
+        try {
+            fetchUpdatedLog4jXml();
+
+            ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+            Runnable checkLogLevelTask = LogLevelStartUpAgent::fetchUpdatedLog4jXml;
+
+            long logLevelChangesDuration = LOG_LEVEL_CHANGES_DURATION_DEFAULT;
+            try{
+                logLevelChangesDuration = Long.parseLong(System.getProperty(LOG_LEVEL_CHANGES_DURATION));
+            } catch (Exception e) {
+                System.err.println("unable to get property log.level.changes.duration setting default value as 10 seconds: " + e.getMessage());
             }
-            Thread.sleep(20);
-        }
-        
-        // Wait for expiration
-        Thread.sleep(200);
-        
-        // Verify all entries are removed
-        for (int i = 0; i < 10; i++) {
-            assertNull(cache.get(TEST_KEY + i), "Entry " + i + " should be removed");
+            scheduledExecutorService.scheduleAtFixedRate(checkLogLevelTask, logLevelChangesDuration, logLevelChangesDuration, TimeUnit.SECONDS);
+
+        } catch (Exception e) {
+            System.err.println("Error calling REST API: " + e.getMessage());
         }
     }
 
-    @Test
-    void shutdown_StopsScheduler() throws InterruptedException {
-        cache = Log4JCache.getInstance(TimeUnit.MILLISECONDS, 100);
-        cache.put(TEST_KEY, TEST_VALUE);
-        
-        // Shutdown the cache
-        cache.shutdown();
-        
-        // Wait for what would have been the expiration time
-        Thread.sleep(200);
-        
-        // Entry should still be present as scheduler was shutdown
-        assertEquals(TEST_VALUE, cache.get(TEST_KEY), "Entry should remain after shutdown");
+    /**
+     * Method to call generate-log4j-xml REST API to check if Log4j2 configuration has been updated
+     */
+    private static void fetchUpdatedLog4jXml() {
+        try {
+            String loggingLevelClientAppUrl = System.getProperty(LOG_LEVEL_CONTROLLER_HOST) + "/" + LOG4J2_XML_FILE_NAME;
+            System.out.println("Calling /Log4j.xml service to fetch updated Logging level : at " + Instant.now());
+            URL url = new URL(loggingLevelClientAppUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestProperty("Accept", "application/xml");
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(TIMEOUT);
+            connection.setReadTimeout(TIMEOUT);
+            int responseCode = connection.getResponseCode();
+            if (responseCode == 200) {
+                File outputFile = new File(LOG4J2_XML_FILE_NAME);
+                try (InputStream inputStream = connection.getInputStream();
+                     FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
+
+                    byte[] buffer = new byte[1024];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        fileOutputStream.write(buffer, 0, bytesRead);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error calling REST API to fetch updated Log4j2.xml file: " + e.getMessage());
+        }
     }
+}
+
