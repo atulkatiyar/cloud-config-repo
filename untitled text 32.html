@@ -1,150 +1,79 @@
-class LogLevelStartUpAgentTest {
+package com.lseg.ipps.solutions.shared.agent;
 
-    @TempDir
-    Path tempDir;
-    
-    private static final String TEST_HOST = "http://test-host:8080";
-    private Instrumentation mockInstrumentation;
-    private HttpURLConnection mockConnection;
-    private URL mockUrl;
 
-    @BeforeEach
-    void setUp() throws Exception {
-        mockInstrumentation = mock(Instrumentation.class);
-        mockConnection = mock(HttpURLConnection.class);
-        mockUrl = mock(URL.class);
-        
-        // Set up system properties
-        System.setProperty(LogLevelStartUpAgent.LOG_LEVEL_CONTROLLER_HOST, TEST_HOST);
-        System.setProperty(LogLevelStartUpAgent.LOG_LEVEL_CHANGES_DURATION, "5");
-    }
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.lang.instrument.Instrumentation;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.time.Instant;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-    @Test
-    void testPremainWithValidConfiguration() throws Exception {
-        // Prepare mocks
-        try (MockedStatic<Executors> executorsMock = Mockito.mockStatic(Executors.class)) {
-            ScheduledExecutorService mockExecutor = mock(ScheduledExecutorService.class);
-            executorsMock.when(() -> Executors.newScheduledThreadPool(1))
-                    .thenReturn(mockExecutor);
+public class LogLevelStartUpAgent {
 
-            // Execute
-            LogLevelStartUpAgent.premain(null, mockInstrumentation);
+    public static final int TIMEOUT = 15000;
+    public static final String LOG_LEVEL_CHANGES_DURATION = "log.level.changes.duration";
+    public static final int LOG_LEVEL_CHANGES_DURATION_DEFAULT = 10;
+    public static final String LOG4J2_XML_FILE_NAME = "log4j2.xml";
+    public static final String LOG_LEVEL_CONTROLLER_HOST = "log.level.controller.host";
 
-            // Verify scheduler was set up correctly
-            verify(mockExecutor).scheduleAtFixedRate(
-                any(Runnable.class),
-                eq(5L),
-                eq(5L),
-                eq(TimeUnit.SECONDS)
-            );
-        }
-    }
+    /**
+     * Method to check if there is any update on logging config via Java Instrumentation Agent
+     * @param agentArgs
+     * @param inst
+     */
+    public static void premain(String agentArgs, Instrumentation inst) {
+        try {
+            fetchUpdatedLog4jXml();
 
-    @Test
-    void testPremainWithDefaultDuration() throws Exception {
-        // Remove custom duration property
-        System.clearProperty(LogLevelStartUpAgent.LOG_LEVEL_CHANGES_DURATION);
+            ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+            Runnable checkLogLevelTask = LogLevelStartUpAgent::fetchUpdatedLog4jXml;
 
-        try (MockedStatic<Executors> executorsMock = Mockito.mockStatic(Executors.class)) {
-            ScheduledExecutorService mockExecutor = mock(ScheduledExecutorService.class);
-            executorsMock.when(() -> Executors.newScheduledThreadPool(1))
-                    .thenReturn(mockExecutor);
-
-            // Execute
-            LogLevelStartUpAgent.premain(null, mockInstrumentation);
-
-            // Verify default duration is used
-            verify(mockExecutor).scheduleAtFixedRate(
-                any(Runnable.class),
-                eq(10L),
-                eq(10L),
-                eq(TimeUnit.SECONDS)
-            );
-        }
-    }
-
-    @Test
-    void testFetchUpdatedLog4jXmlSuccess() throws Exception {
-        // Create temporary file
-        File tempLog4jFile = tempDir.resolve("log4j2.xml").toFile();
-        
-        // Set up test XML content
-        String testXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Configuration></Configuration>";
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(testXml.getBytes());
-
-        // Set up mock connection behavior
-        when(mockConnection.getResponseCode()).thenReturn(200);
-        when(mockConnection.getInputStream()).thenReturn(inputStream);
-        when(mockUrl.openConnection()).thenReturn(mockConnection);
-
-        try (MockedStatic<URL> urlMock = Mockito.mockStatic(URL.class)) {
-            // Mock URL constructor
-            String expectedUrl = TEST_HOST + "/" + LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME;
-            urlMock.when(() -> new URL(expectedUrl)).thenReturn(mockUrl);
-            
-            // Mock file creation
-            try (MockedStatic<File> fileMock = Mockito.mockStatic(File.class)) {
-                fileMock.when(() -> new File(LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME))
-                        .thenReturn(tempLog4jFile);
-
-                // Execute the private method using reflection
-                Method fetchMethod = LogLevelStartUpAgent.class.getDeclaredMethod("fetchUpdatedLog4jXml");
-                fetchMethod.setAccessible(true);
-                fetchMethod.invoke(null);
-
-                // Verify HTTP connection settings
-                verify(mockConnection).setRequestProperty("Accept", "application/xml");
-                verify(mockConnection).setRequestMethod("GET");
-                verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
-                verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
-
-                // Verify the file was created with correct content
-                assertTrue(tempLog4jFile.exists());
-                String savedContent = new String(Files.readAllBytes(tempLog4jFile.toPath()));
-                assertEquals(testXml, savedContent);
+            long logLevelChangesDuration = LOG_LEVEL_CHANGES_DURATION_DEFAULT;
+            try{
+                logLevelChangesDuration = Long.parseLong(System.getProperty(LOG_LEVEL_CHANGES_DURATION));
+            } catch (Exception e) {
+                System.err.println("unable to get property log.level.changes.duration setting default value as 10 seconds: " + e.getMessage());
             }
+            scheduledExecutorService.scheduleAtFixedRate(checkLogLevelTask, logLevelChangesDuration, logLevelChangesDuration, TimeUnit.SECONDS);
+
+        } catch (Exception e) {
+            System.err.println("Error calling REST API: " + e.getMessage());
         }
     }
 
-    @Test
-    void testFetchUpdatedLog4jXmlFailure() throws Exception {
-        // Set up mock connection to simulate failure
-        when(mockConnection.getResponseCode()).thenReturn(404);
-        when(mockUrl.openConnection()).thenReturn(mockConnection);
+    /**
+     * Method to call generate-log4j-xml REST API to check if Log4j2 configuration has been updated
+     */
+    private static void fetchUpdatedLog4jXml() {
+        try {
+            String loggingLevelClientAppUrl = System.getProperty(LOG_LEVEL_CONTROLLER_HOST) + "/" + LOG4J2_XML_FILE_NAME;
+            System.out.println("Calling /Log4j.xml service to fetch updated Logging level : at " + Instant.now());
+            URL url = new URL(loggingLevelClientAppUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestProperty("Accept", "application/xml");
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(TIMEOUT);
+            connection.setReadTimeout(TIMEOUT);
+            int responseCode = connection.getResponseCode();
+            if (responseCode == 200) {
+                File outputFile = new File(LOG4J2_XML_FILE_NAME);
+                try (InputStream inputStream = connection.getInputStream();
+                     FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
 
-        try (MockedStatic<URL> urlMock = Mockito.mockStatic(URL.class)) {
-            String expectedUrl = TEST_HOST + "/" + LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME;
-            urlMock.when(() -> new URL(expectedUrl)).thenReturn(mockUrl);
-
-            // Execute the private method using reflection
-            Method fetchMethod = LogLevelStartUpAgent.class.getDeclaredMethod("fetchUpdatedLog4jXml");
-            fetchMethod.setAccessible(true);
-            fetchMethod.invoke(null);
-
-            // Verify no file was created
-            File log4jFile = new File(LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME);
-            assertFalse(log4jFile.exists());
-        }
-    }
-
-    @Test
-    void testConnectionTimeout() throws Exception {
-        // Set up mock connection to simulate timeout
-        when(mockConnection.getResponseCode()).thenThrow(new SocketTimeoutException("Connection timed out"));
-        when(mockUrl.openConnection()).thenReturn(mockConnection);
-
-        try (MockedStatic<URL> urlMock = Mockito.mockStatic(URL.class)) {
-            String expectedUrl = TEST_HOST + "/" + LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME;
-            urlMock.when(() -> new URL(expectedUrl)).thenReturn(mockUrl);
-
-            // Execute the private method using reflection
-            Method fetchMethod = LogLevelStartUpAgent.class.getDeclaredMethod("fetchUpdatedLog4jXml");
-            fetchMethod.setAccessible(true);
-            fetchMethod.invoke(null);
-
-            // Verify timeout settings were applied
-            verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
-            verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
+                    byte[] buffer = new byte[1024];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        fileOutputStream.write(buffer, 0, bytesRead);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error calling REST API to fetch updated Log4j2.xml file: " + e.getMessage());
         }
     }
 }
+
