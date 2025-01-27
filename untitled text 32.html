@@ -1,3 +1,148 @@
-org.mockito.exceptions.misusing.WrongTypeOfReturnValue: 
-URL cannot be returned by toLowerCase()
-toLowerCase() should return String
+class LogLevelStartUpAgentTest {
+
+    @TempDir
+    Path tempDir;
+    
+    private static final String TEST_HOST = "http://test-host:8080";
+    private Instrumentation mockInstrumentation;
+    private HttpURLConnection mockConnection;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        mockInstrumentation = mock(Instrumentation.class);
+        mockConnection = mock(HttpURLConnection.class);
+        
+        // Set up system properties
+        System.setProperty(LogLevelStartUpAgent.LOG_LEVEL_CONTROLLER_HOST, TEST_HOST);
+        System.setProperty(LogLevelStartUpAgent.LOG_LEVEL_CHANGES_DURATION, "5");
+    }
+
+    @Test
+    void testPremainWithValidConfiguration() throws Exception {
+        // Prepare mocks
+        try (MockedStatic<Executors> executorsMock = Mockito.mockStatic(Executors.class)) {
+            ScheduledExecutorService mockExecutor = mock(ScheduledExecutorService.class);
+            executorsMock.when(() -> Executors.newScheduledThreadPool(1))
+                    .thenReturn(mockExecutor);
+
+            // Execute
+            LogLevelStartUpAgent.premain(null, mockInstrumentation);
+
+            // Verify scheduler was set up correctly
+            verify(mockExecutor).scheduleAtFixedRate(
+                any(Runnable.class),
+                eq(5L),
+                eq(5L),
+                eq(TimeUnit.SECONDS)
+            );
+        }
+    }
+
+    @Test
+    void testPremainWithDefaultDuration() throws Exception {
+        // Remove custom duration property
+        System.clearProperty(LogLevelStartUpAgent.LOG_LEVEL_CHANGES_DURATION);
+
+        try (MockedStatic<Executors> executorsMock = Mockito.mockStatic(Executors.class)) {
+            ScheduledExecutorService mockExecutor = mock(ScheduledExecutorService.class);
+            executorsMock.when(() -> Executors.newScheduledThreadPool(1))
+                    .thenReturn(mockExecutor);
+
+            // Execute
+            LogLevelStartUpAgent.premain(null, mockInstrumentation);
+
+            // Verify default duration is used
+            verify(mockExecutor).scheduleAtFixedRate(
+                any(Runnable.class),
+                eq(10L),
+                eq(10L),
+                eq(TimeUnit.SECONDS)
+            );
+        }
+    }
+
+    @Test
+    void testFetchUpdatedLog4jXmlSuccess() throws Exception {
+        // Prepare test XML content
+        String testXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Configuration></Configuration>";
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(testXml.getBytes());
+
+        // Set up mock connection behavior
+        when(mockConnection.getResponseCode()).thenReturn(200);
+        when(mockConnection.getInputStream()).thenReturn(inputStream);
+        
+        // Create temporary file
+        File tempLog4jFile = tempDir.resolve("log4j2.xml").toFile();
+        
+        try (MockedStatic<URL> urlMock = Mockito.mockStatic(URL.class)) {
+            URL realUrl = new URL(TEST_HOST + "/log4j2.xml");
+            URLConnection connection = mock(URLConnection.class);
+            
+            urlMock.when(() -> new URL(TEST_HOST + "/log4j2.xml")).thenReturn(realUrl);
+            
+            try (MockedStatic<URLConnection> connectionMock = Mockito.mockStatic(URLConnection.class)) {
+                when(realUrl.openConnection()).thenReturn(mockConnection);
+                
+                // Create file mock
+                try (MockedStatic<File> fileMock = Mockito.mockStatic(File.class)) {
+                    fileMock.when(() -> new File(LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME))
+                            .thenReturn(tempLog4jFile);
+
+                    // Execute the private method using reflection
+                    Method fetchMethod = LogLevelStartUpAgent.class.getDeclaredMethod("fetchUpdatedLog4jXml");
+                    fetchMethod.setAccessible(true);
+                    fetchMethod.invoke(null);
+
+                    // Verify the file was created with correct content
+                    assertTrue(tempLog4jFile.exists());
+                    String savedContent = new String(Files.readAllBytes(tempLog4jFile.toPath()));
+                    assertEquals(testXml, savedContent);
+                }
+            }
+        }
+    }
+
+    @Test
+    void testFetchUpdatedLog4jXmlFailure() throws Exception {
+        // Set up mock connection to simulate failure
+        when(mockConnection.getResponseCode()).thenReturn(404);
+
+        try (MockedStatic<URL> urlMock = Mockito.mockStatic(URL.class)) {
+            URL realUrl = new URL(TEST_HOST + "/log4j2.xml");
+            urlMock.when(() -> new URL(TEST_HOST + "/log4j2.xml")).thenReturn(realUrl);
+            
+            when(realUrl.openConnection()).thenReturn(mockConnection);
+
+            // Execute the private method using reflection
+            Method fetchMethod = LogLevelStartUpAgent.class.getDeclaredMethod("fetchUpdatedLog4jXml");
+            fetchMethod.setAccessible(true);
+            fetchMethod.invoke(null);
+
+            // Verify no file was created
+            File log4jFile = new File(LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME);
+            assertFalse(log4jFile.exists());
+        }
+    }
+
+    @Test
+    void testConnectionTimeout() throws Exception {
+        // Set up mock connection to simulate timeout
+        when(mockConnection.getResponseCode()).thenThrow(new SocketTimeoutException("Connection timed out"));
+
+        try (MockedStatic<URL> urlMock = Mockito.mockStatic(URL.class)) {
+            URL realUrl = new URL(TEST_HOST + "/log4j2.xml");
+            urlMock.when(() -> new URL(TEST_HOST + "/log4j2.xml")).thenReturn(realUrl);
+            
+            when(realUrl.openConnection()).thenReturn(mockConnection);
+
+            // Execute the private method using reflection
+            Method fetchMethod = LogLevelStartUpAgent.class.getDeclaredMethod("fetchUpdatedLog4jXml");
+            fetchMethod.setAccessible(true);
+            fetchMethod.invoke(null);
+
+            // Verify timeout settings were applied
+            verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
+            verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
+        }
+    }
+}
