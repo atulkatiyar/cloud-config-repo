@@ -1,31 +1,45 @@
-org.mockito.exceptions.misusing.WrongTypeOfReturnValue: 
-URL cannot be returned by toLowerCase()
-toLowerCase() should return String
+   HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+    URL mockUrl = mock(URL.class);
+    InputStream mockInputStream = new ByteArrayInputStream("test content".getBytes());
+    FileOutputStream mockFileOutputStream = mock(FileOutputStream.class);
+    File mockFile = mock(File.class);
 
-@Test
-    void testFetchUpdatedLog4jXml() throws Exception {
-        URL mockUrl = mock(URL.class);
-        HttpURLConnection mockConnection = mock(HttpURLConnection.class);
-        InputStream mockInputStream = mock(InputStream.class);
-        FileOutputStream mockFileOutputStream = mock(FileOutputStream.class);
+    // Setup system property
+    System.setProperty(LogLevelStartUpAgent.LOG_LEVEL_CONTROLLER_HOST, "http://example.com");
+    String expectedUrlString = "http://example.com/log4j2.xml";
 
-        try (MockedStatic<URL> urlMock = Mockito.mockStatic(URL.class);
-             MockedStatic<FileOutputStream> fileOutputStreamMock = Mockito.mockStatic(FileOutputStream.class)) {
+    try (MockedStatic<URL> urlMock = Mockito.mockStatic(URL.class);
+         MockedStatic<File> fileMock = Mockito.mockStatic(File.class);
+         MockedStatic<FileOutputStream> fileOutputStreamMock = Mockito.mockStatic(FileOutputStream.class)) {
+        
+        // Mock URL creation
+        urlMock.when(() -> new URL(expectedUrlString)).thenReturn(mockUrl);
+        
+        // Mock connection setup
+        when(mockUrl.openConnection()).thenReturn(mockConnection);
+        when(mockConnection.getResponseCode()).thenReturn(200);
+        when(mockConnection.getInputStream()).thenReturn(mockInputStream);
+        
+        // Mock File creation
+        fileMock.when(() -> new File(LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME)).thenReturn(mockFile);
+        
+        // Mock FileOutputStream
+        fileOutputStreamMock.when(() -> new FileOutputStream(mockFile)).thenReturn(mockFileOutputStream);
 
-            urlMock.when(() -> new URL("http://example.com/log4j2.xml")).thenReturn(mockUrl);
-            when(mockUrl.openConnection()).thenReturn(mockConnection);
-            when(mockConnection.getResponseCode()).thenReturn(200);
-            when(mockConnection.getInputStream()).thenReturn(mockInputStream);
-            fileOutputStreamMock.when(() -> new FileOutputStream(new File(LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME)))
-                    .thenReturn(mockFileOutputStream);
+        // Call the method using reflection since it's private
+        Method fetchMethod = LogLevelStartUpAgent.class.getDeclaredMethod("fetchUpdatedLog4jXml");
+        fetchMethod.setAccessible(true);
+        fetchMethod.invoke(null);
 
-            LogLevelStartUpAgent.fetchUpdatedLog4jXml();
-
-            verify(mockConnection).setRequestProperty("Accept", "application/xml");
-            verify(mockConnection).setRequestMethod("GET");
-            verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
-            verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
-            verify(mockInputStream, atLeastOnce()).read(any(byte[].class));
-            verify(mockFileOutputStream, atLeastOnce()).write(any(byte[].class), anyInt(), anyInt());
-        }
+        // Verify connection setup
+        verify(mockConnection).setRequestProperty("Accept", "application/xml");
+        verify(mockConnection).setRequestMethod("GET");
+        verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
+        verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
+        
+        // Verify file operations
+        verify(mockFileOutputStream, atLeastOnce()).write(any(byte[].class), anyInt(), anyInt());
+        verify(mockFileOutputStream).close();
+    } finally {
+        System.clearProperty(LogLevelStartUpAgent.LOG_LEVEL_CONTROLLER_HOST);
     }
