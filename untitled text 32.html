@@ -1,79 +1,88 @@
-package com.lseg.ipps.solutions.shared.agent;
+class LogLevelStartUpAgentTest {
 
+    @Test
+    void testFetchUpdatedLog4jXmlSuccess() throws Exception {
+        // Mock System properties
+        try (MockedStatic<System> systemMock = mockStatic(System.class)) {
+            systemMock.when(() -> System.getProperty("log.level.controller.host"))
+                    .thenReturn("http://mocked-host");
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.lang.instrument.Instrumentation;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.time.Instant;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+            // Mock URL and HttpURLConnection
+            HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+            URL mockUrl = mock(URL.class);
 
-public class LogLevelStartUpAgent {
+            when(mockUrl.openConnection()).thenReturn(mockConnection);
+            when(mockConnection.getResponseCode()).thenReturn(200);
+            when(mockConnection.getInputStream()).thenReturn(new ByteArrayInputStream("mocked-xml-content".getBytes()));
 
-    public static final int TIMEOUT = 15000;
-    public static final String LOG_LEVEL_CHANGES_DURATION = "log.level.changes.duration";
-    public static final int LOG_LEVEL_CHANGES_DURATION_DEFAULT = 10;
-    public static final String LOG4J2_XML_FILE_NAME = "log4j2.xml";
-    public static final String LOG_LEVEL_CONTROLLER_HOST = "log.level.controller.host";
+            try (MockedStatic<URL> urlMock = mockStatic(URL.class)) {
+                urlMock.when(() -> new URL("http://mocked-host/log4j2.xml"))
+                        .thenReturn(mockUrl);
 
-    /**
-     * Method to check if there is any update on logging config via Java Instrumentation Agent
-     * @param agentArgs
-     * @param inst
-     */
-    public static void premain(String agentArgs, Instrumentation inst) {
-        try {
-            fetchUpdatedLog4jXml();
+                // Call the method
+                LogLevelStartUpAgent.fetchUpdatedLog4jXml();
 
-            ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
-            Runnable checkLogLevelTask = LogLevelStartUpAgent::fetchUpdatedLog4jXml;
+                // Verify
+                verify(mockConnection).setRequestProperty("Accept", "application/xml");
+                verify(mockConnection).setRequestMethod("GET");
+                verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
+                verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
 
-            long logLevelChangesDuration = LOG_LEVEL_CHANGES_DURATION_DEFAULT;
-            try{
-                logLevelChangesDuration = Long.parseLong(System.getProperty(LOG_LEVEL_CHANGES_DURATION));
-            } catch (Exception e) {
-                System.err.println("unable to get property log.level.changes.duration setting default value as 10 seconds: " + e.getMessage());
+                // Check if the file is created
+                File outputFile = new File("log4j2.xml");
+                assertTrue(outputFile.exists());
+                outputFile.delete(); // Clean up after test
             }
-            scheduledExecutorService.scheduleAtFixedRate(checkLogLevelTask, logLevelChangesDuration, logLevelChangesDuration, TimeUnit.SECONDS);
-
-        } catch (Exception e) {
-            System.err.println("Error calling REST API: " + e.getMessage());
         }
     }
 
-    /**
-     * Method to call generate-log4j-xml REST API to check if Log4j2 configuration has been updated
-     */
-    private static void fetchUpdatedLog4jXml() {
-        try {
-            String loggingLevelClientAppUrl = System.getProperty(LOG_LEVEL_CONTROLLER_HOST) + "/" + LOG4J2_XML_FILE_NAME;
-            System.out.println("Calling /Log4j.xml service to fetch updated Logging level : at " + Instant.now());
-            URL url = new URL(loggingLevelClientAppUrl);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestProperty("Accept", "application/xml");
-            connection.setRequestMethod("GET");
-            connection.setConnectTimeout(TIMEOUT);
-            connection.setReadTimeout(TIMEOUT);
-            int responseCode = connection.getResponseCode();
-            if (responseCode == 200) {
-                File outputFile = new File(LOG4J2_XML_FILE_NAME);
-                try (InputStream inputStream = connection.getInputStream();
-                     FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
+    @Test
+    void testFetchUpdatedLog4jXmlErrorResponse() throws Exception {
+        // Mock System properties
+        try (MockedStatic<System> systemMock = mockStatic(System.class)) {
+            systemMock.when(() -> System.getProperty("log.level.controller.host"))
+                    .thenReturn("http://mocked-host");
 
-                    byte[] buffer = new byte[1024];
-                    int bytesRead;
-                    while ((bytesRead = inputStream.read(buffer)) != -1) {
-                        fileOutputStream.write(buffer, 0, bytesRead);
-                    }
-                }
+            // Mock URL and HttpURLConnection
+            HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+            URL mockUrl = mock(URL.class);
+
+            when(mockUrl.openConnection()).thenReturn(mockConnection);
+            when(mockConnection.getResponseCode()).thenReturn(500);
+
+            try (MockedStatic<URL> urlMock = mockStatic(URL.class)) {
+                urlMock.when(() -> new URL("http://mocked-host/log4j2.xml"))
+                        .thenReturn(mockUrl);
+
+                // Call the method
+                LogLevelStartUpAgent.fetchUpdatedLog4jXml();
+
+                // Verify
+                verify(mockConnection).setRequestProperty("Accept", "application/xml");
+                verify(mockConnection).setRequestMethod("GET");
+                verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
+                verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
+
+                // Check that no file is created
+                File outputFile = new File("log4j2.xml");
+                assertFalse(outputFile.exists());
             }
-        } catch (Exception e) {
-            System.err.println("Error calling REST API to fetch updated Log4j2.xml file: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void testFetchUpdatedLog4jXmlInvalidHost() {
+        // Mock System properties
+        try (MockedStatic<System> systemMock = mockStatic(System.class)) {
+            systemMock.when(() -> System.getProperty("log.level.controller.host"))
+                    .thenReturn(null);
+
+            // Call the method
+            LogLevelStartUpAgent.fetchUpdatedLog4jXml();
+
+            // Check that no file is created
+            File outputFile = new File("log4j2.xml");
+            assertFalse(outputFile.exists());
         }
     }
 }
-
