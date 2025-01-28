@@ -1,45 +1,27 @@
-   HttpURLConnection mockConnection = mock(HttpURLConnection.class);
-    URL mockUrl = mock(URL.class);
-    InputStream mockInputStream = new ByteArrayInputStream("test content".getBytes());
-    FileOutputStream mockFileOutputStream = mock(FileOutputStream.class);
-    File mockFile = mock(File.class);
+AWS RDS automatically creates backups for your Aurora PostgreSQL database. However, automated backups do not occur in real-time or close to real-time.
 
-    // Setup system property
-    System.setProperty(LogLevelStartUpAgent.LOG_LEVEL_CONTROLLER_HOST, "http://example.com");
-    String expectedUrlString = "http://example.com/log4j2.xml";
+How Automated Backups Work in AWS RDS
+Backup Frequency:
 
-    try (MockedStatic<URL> urlMock = Mockito.mockStatic(URL.class);
-         MockedStatic<File> fileMock = Mockito.mockStatic(File.class);
-         MockedStatic<FileOutputStream> fileOutputStreamMock = Mockito.mockStatic(FileOutputStream.class)) {
-        
-        // Mock URL creation
-        urlMock.when(() -> new URL(expectedUrlString)).thenReturn(mockUrl);
-        
-        // Mock connection setup
-        when(mockUrl.openConnection()).thenReturn(mockConnection);
-        when(mockConnection.getResponseCode()).thenReturn(200);
-        when(mockConnection.getInputStream()).thenReturn(mockInputStream);
-        
-        // Mock File creation
-        fileMock.when(() -> new File(LogLevelStartUpAgent.LOG4J2_XML_FILE_NAME)).thenReturn(mockFile);
-        
-        // Mock FileOutputStream
-        fileOutputStreamMock.when(() -> new FileOutputStream(mockFile)).thenReturn(mockFileOutputStream);
+Automated backups are taken once per day during a specified backup window.
+AWS also captures transaction logs every 5 minutes to allow point-in-time recovery.
+Storage Location:
 
-        // Call the method using reflection since it's private
-        Method fetchMethod = LogLevelStartUpAgent.class.getDeclaredMethod("fetchUpdatedLog4jXml");
-        fetchMethod.setAccessible(true);
-        fetchMethod.invoke(null);
+The backup data, including snapshots and transaction logs, is stored in Amazon S3 by AWS.
+Real-Time Backup?
 
-        // Verify connection setup
-        verify(mockConnection).setRequestProperty("Accept", "application/xml");
-        verify(mockConnection).setRequestMethod("GET");
-        verify(mockConnection).setConnectTimeout(LogLevelStartUpAgent.TIMEOUT);
-        verify(mockConnection).setReadTimeout(LogLevelStartUpAgent.TIMEOUT);
-        
-        // Verify file operations
-        verify(mockFileOutputStream, atLeastOnce()).write(any(byte[].class), anyInt(), anyInt());
-        verify(mockFileOutputStream).close();
-    } finally {
-        System.clearProperty(LogLevelStartUpAgent.LOG_LEVEL_CONTROLLER_HOST);
-    }
+No, automated snapshots are not real-time. They occur at a scheduled time once a day.
+However, point-in-time recovery (PITR) allows restoring data from transaction logs to a specific moment.
+Checking the Last Backup Time
+The screenshot shows:
+Snapshot Creation Time: January 14, 2025, at 02:03 UTC
+Instance Creation Time: January 10, 2025, at 04:31 UTC
+This suggests that the latest backup was taken on schedule, not in real-time.
+Alternative for Near-Real-Time Backups
+If you need backups closer to real-time, consider:
+
+Manual Snapshots – You can create snapshots anytime.
+Cross-Region Replication – Continuously replicates data to another region.
+AWS DMS (Database Migration Service) – For real-time replication.
+Aurora Backtrack – Allows rolling back within a set time frame.
+Would you like guidance on setting up one of these solutions?
