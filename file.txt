@@ -1,5 +1,0 @@
-As part of Permit to Operate model, It is required to restore the production database to another aws account for below reasons.
-
-To ensure that the Prod DB can be restored in the event of prod site down
-To ensure that the prod db data can be used to troubleshoot production issues in "Prod sup ( Prod like env) " environment. 
-Could you please come up with a plan to restore the DB backup in another AWS Account without loosing any data from the database.
