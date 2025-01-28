@@ -1,1 +1,0 @@
-javax.servlet.ServletException: Circular view path [login]: would dispatch back to the current handler URL [/login] again. Check your ViewResolver setup! (Hint: This may be the result of an unspecified view, due to default view name generation.)
