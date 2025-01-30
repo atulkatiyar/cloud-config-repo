@@ -1,1 +1,79 @@
-You don't have permission to rds:StartExportTask
+# Variables - Replace these with actual values
+SOURCE_AWS_ACCOUNT_ID="<SOURCE_ACCOUNT_ID>"
+DEST_AWS_ACCOUNT_ID="<DESTINATION_ACCOUNT_ID>"
+RDS_CLUSTER_IDENTIFIER="<RDS_CLUSTER_NAME>"
+SNAPSHOT_NAME="rds-${RDS_CLUSTER_IDENTIFIER}-$(date +%Y-%m-%d-%H-%M-%S)"
+EXPORT_TASK_NAME="export-task-${SNAPSHOT_NAME}"
+S3_BUCKET_NAME="<SOURCE_S3_BUCKET_NAME>"
+S3_BUCKET_ARN="arn:aws:s3:::${S3_BUCKET_NAME}"
+IAM_ROLE_ARN="arn:aws:iam::${SOURCE_AWS_ACCOUNT_ID}:role/<IAM_ROLE_FOR_EXPORT>"
+KMS_KEY_ID="<KMS_KEY_ARN>"  # Use AWS KMS Key for encryption
+
+# Step 1: Take a snapshot of the Aurora DB cluster
+echo "Creating snapshot: ${SNAPSHOT_NAME}"
+aws rds create-db-cluster-snapshot --db-cluster-identifier $RDS_CLUSTER_IDENTIFIER --db-cluster-snapshot-identifier $SNAPSHOT_NAME
+
+# Wait for snapshot completion
+echo "Waiting for snapshot to become available..."
+aws rds wait db-cluster-snapshot-available --db-cluster-snapshot-identifier $SNAPSHOT_NAME
+echo "Snapshot ${SNAPSHOT_NAME} is now available."
+
+# Step 2: Export Snapshot to S3
+echo "Starting RDS export task to S3..."
+aws rds start-export-task \
+    --export-task-identifier $EXPORT_TASK_NAME \
+    --source-arn "arn:aws:rds:us-east-1:${SOURCE_AWS_ACCOUNT_ID}:cluster-snapshot:${SNAPSHOT_NAME}" \
+    --s3-bucket-name $S3_BUCKET_NAME \
+    --iam-role-arn $IAM_ROLE_ARN \
+    --kms-key-id $KMS_KEY_ID \
+    --export-only '["*"]'  # Export everything
+
+echo "Export task started: ${EXPORT_TASK_NAME}"
+
+# Step 3: Enable Cross-Account Access to S3 Bucket
+echo "Setting up cross-account replication for S3 bucket..."
+
+aws s3api put-bucket-policy --bucket $S3_BUCKET_NAME --policy "{
+  \"Version\": \"2012-10-17\",
+  \"Statement\": [
+    {
+      \"Effect\": \"Allow\",
+      \"Principal\": {\"AWS\": \"arn:aws:iam::${DEST_AWS_ACCOUNT_ID}:root\"},
+      \"Action\": [
+        \"s3:GetObject\",
+        \"s3:ListBucket\"
+      ],
+      \"Resource\": [
+        \"${S3_BUCKET_ARN}\",
+        \"${S3_BUCKET_ARN}/*\"
+      ]
+    }
+  ]
+}"
+
+echo "Cross-account S3 access granted to AWS Account: ${DEST_AWS_ACCOUNT_ID}"
+
+# Step 4: Enable Cross-Region Replication (Optional)
+DEST_S3_BUCKET="<DESTINATION_S3_BUCKET_NAME>"
+
+echo "Enabling cross-account S3 replication to ${DEST_S3_BUCKET}..."
+
+aws s3api put-bucket-replication --bucket $S3_BUCKET_NAME --replication-configuration "{
+  \"Role\": \"${IAM_ROLE_ARN}\",
+  \"Rules\": [
+    {
+      \"Status\": \"Enabled\",
+      \"Priority\": 1,
+      \"DeleteMarkerReplication\": {\"Status\": \"Disabled\"},
+      \"Filter\": {},
+      \"Destination\": {
+        \"Bucket\": \"arn:aws:s3:::${DEST_S3_BUCKET}\",
+        \"StorageClass\": \"STANDARD\"
+      }
+    }
+  ]
+}"
+
+echo "S3 replication enabled from ${S3_BUCKET_NAME} to ${DEST_S3_BUCKET}"
+
+echo "✅ Backup and sharing process completed successfully!"
