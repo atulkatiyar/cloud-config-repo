@@ -7,3 +7,84 @@ ERROR StatusConsoleListener Console contains an invalid element or attribute "Js
     <artifactId>log4j-layout-template-json</artifactId>
     <version>2.20.0</version>
 </dependency>
+
+
+
+nano rds_backup_to_s3.sh     
+Copy and paste the AWS CLI script (from my previous response) into the editor.
+Save the file:
+Press CTRL + X (to exit nano)
+Press Y (to confirm changes)
+Press Enter
+Step 3: Make the Script Executable
+bash
+Copy
+Edit
+chmod +x rds_backup_to_s3.sh
+Step 4: Run the Script
+bash
+Copy
+Edit
+./rds_backup_to_s3.sh
+Step 5: Monitor the Progress
+Verify the snapshot creation:
+bash
+Copy
+Edit
+aws rds describe-db-cluster-snapshots --db-cluster-identifier <RDS_CLUSTER_NAME>
+Check export task status:
+bash
+Copy
+Edit
+aws rds describe-export-tasks --export-task-identifier export-task-<YOUR_SNAPSHOT_NAME>
+Check if S3 bucket policy is applied:
+bash
+Copy
+Edit
+aws s3api get-bucket-policy --bucket <SOURCE_S3_BUCKET_NAME>
+Confirm S3 replication is enabled:
+bash
+Copy
+Edit
+aws s3api get-bucket-replication --bucket <SOURCE_S3_BUCKET_NAME>
+Step 6: Troubleshooting
+Permission Issues?
+
+Ensure your IAM role has the necessary permissions (rds:StartExportTask, s3:PutObject, etc.).
+Check using:
+bash
+Copy
+Edit
+aws sts get-caller-identity
+This will confirm if CloudShell is using the correct IAM role.
+Export Task Failing?
+
+bash
+Copy
+Edit
+aws rds describe-export-tasks --export-task-identifier <EXPORT_TASK_NAME>
+Look for error messages in the output.
+
+S3 Access Denied?
+
+Double-check the S3 bucket policy to ensure the destination account has access.
+Final Notes
+✅ CloudShell is pre-configured with AWS CLI, so you don’t need to install anything.
+✅ Make sure you have the correct AWS permissions before running the script.
+✅ Always replace <PLACEHOLDERS> with your actual values.
+
+Let me know if you need help debugging! 🚀
+
+
+
+
+
+
+
+
+
+
+
+
+
+
