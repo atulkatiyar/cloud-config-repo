@@ -27,3 +27,4 @@ Please pay attention that the course consists of 2 chapters, kindly make sure yo
 IAM Role	Purpose	Key Permissions
 IAM_ROLE_FOR_EXPORT	-> Allows RDS to export snapshots to S3	-> AmazonS3FullAccess, AWSRDSDataFullAccess, AWSKeyManagementServicePowerUser
 IAM_ROLE_FOR_S3_REPLICATION	-> Allows another AWS account to access backups in S3	-> s3:GetObject, s3:ListBucket
+Destination Bucket Policy ->	Allows Account A to replicate data into Account B	-> s3:ReplicateObject, s3:ObjectOwnerOverrideToBucketOwner
