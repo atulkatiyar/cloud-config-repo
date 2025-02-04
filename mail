@@ -7,3 +7,23 @@ Kindly asking you to complete the learning ASAP If you’ve already completed th
 An additional reminder was sent to your LSEG email address as well.
 
 Please pay attention that the course consists of 2 chapters, kindly make sure you’ve completed each of them:
+
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "export.rds.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
+
+
+🎯 Summary
+IAM Role	Purpose	Key Permissions
+IAM_ROLE_FOR_EXPORT	-> Allows RDS to export snapshots to S3	-> AmazonS3FullAccess, AWSRDSDataFullAccess, AWSKeyManagementServicePowerUser
+IAM_ROLE_FOR_S3_REPLICATION	-> Allows another AWS account to access backups in S3	-> s3:GetObject, s3:ListBucket
