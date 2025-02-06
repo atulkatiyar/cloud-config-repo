@@ -49,20 +49,26 @@ write gitlab pipeline which takes package name and its Log level and its expiry 
 stages:
   - store-log-config
 
-variables:
-  AWS_REGION: "us-east-1"  # Change to your AWS region
-  PARAMETER_PATH: "/log-config"
-
 store_log_config:
   stage: store-log-config
-  image: amazon/aws-cli:latest  # Using AWS CLI Docker image
+  image: amazon/aws-cli:latest
+  variables:
+    PACKAGE_NAME:
+      description: "Enter the package name"
+      value: ""  # Default is empty; user must enter a value
+    LOG_LEVEL:
+      description: "Enter log level (e.g., INFO, DEBUG, WARN)"
+      value: "INFO"  # Default value
+    EXPIRY_TIME:
+      description: "Enter expiry time in milliseconds (e.g., 3600000 for 1 hour)"
+      value: "3600000"  # Default value (1 hour)
   script:
     - echo "Storing log level configuration in AWS Parameter Store..."
     
     # Check if required variables are set
     - |
       if [[ -z "$PACKAGE_NAME" || -z "$LOG_LEVEL" || -z "$EXPIRY_TIME" ]]; then
-        echo "❌ ERROR: One or more required variables are missing! Please provide PACKAGE_NAME, LOG_LEVEL, and EXPIRY_TIME."
+        echo "❌ ERROR: One or more required variables are missing!"
         exit 1
       fi
     
@@ -72,13 +78,12 @@ store_log_config:
     # Store in AWS Systems Manager Parameter Store
     - |
       aws ssm put-parameter \
-        --name "$PARAMETER_PATH/$PACKAGE_NAME" \
+        --name "/log-config/$PACKAGE_NAME" \
         --value "$PARAMETER_VALUE" \
         --type "SecureString" \
         --overwrite \
-        --region "$AWS_REGION"
+        --region "us-east-1"
     
     - echo "✅ Log level configuration stored successfully!"
-    
-  only:
-    - main  # Run this only on the main branch
+  
+  when: manual  # Makes it a manual trigger job
