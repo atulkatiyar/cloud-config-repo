@@ -39,3 +39,6 @@ Destination Bucket Policy ->	Allows Account A to replicate data into Account B	-
 
 rds:CopyDBClusterSnapshot",
                 "rds:DescribeDBClusterSnapshots"
+
+
+write gitlab pipeline which takes package name and its Log level and its expiry time(milli sec) in from gitlab WEB pipeline UI and put that in AWS param store
