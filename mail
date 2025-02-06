@@ -87,3 +87,7 @@ store_log_config:
     - echo "✅ Log level configuration stored successfully!"
   
   when: manual  # Makes it a manual trigger job
+
+
+
+This job is stuck because the project doesn't have any runners online assigned to it.
