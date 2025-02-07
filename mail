@@ -46,29 +46,98 @@ write gitlab pipeline which takes package name and its Log level and its expiry 
 
 
 
+variables:
+  AWS_REGION: "eu-west-1"  # Change to your AWS region
+  PARAMETER_PATH: "/log-config"
+  PACKAGE_NAME:
+    value: "com.example"  # Default is empty; user must enter a value
+  LOG_LEVEL:
+    value: "INFO"  # Default value
+  EXPIRY_TIME:
+    value: "3600000"
+  ENVIRONMENT_NAME:
+    value: "---"
+    options:
+      - "dev2"
+      - "nfr"
+      - "uat"
+      - "Prod"
+      - "---"
+    description: "select the target environment"
+
+workflow:
+   rules:
+     - if: $ENVIRONMENT_NAME =~ /^nfr.*/
+       variables:
+         RUNNER_TAG: "psl-epam-runner-qa"
+         TARGET_AWS_ACCOUNT: "332028679471"
+         AWS_ACCOUNT_NAME: "qa"
+     - if: $ENVIRONMENT_NAME =~ /^uat.*/
+       variables:
+         RUNNER_TAG: "psl-epam-runner-uat"
+         TARGET_AWS_ACCOUNT: "851725348656"
+         AWS_ACCOUNT_NAME: "uat"
+     - if: $ENVIRONMENT_NAME =~ /^prod.*/
+       variables:
+         RUNNER_TAG: "psl-epam-runner-prod"
+         TARGET_AWS_ACCOUNT: "730335637172"
+         AWS_ACCOUNT_NAME: "prod"
+     - if: $ENVIRONMENT_NAME =~ /^dev2.*/
+       variables:
+         RUNNER_TAG: "psl-epam-runner"
+         TARGET_AWS_ACCOUNT: "729500479720"
+         AWS_ACCOUNT_NAME: "dev"
+     - when: always
+
+include:  
+  - project: 'ci/stable/security/vault/vault-integrator'
+    ref: '4.1.0' # https://gitlab.dx1.lseg.com/ci/stable/security/vault/vault-integrator/-/tree/master/
+    file:
+      - 'templates/vault-integrator.yml'
+
 stages:
+  - authenticate
   - store-log-config
+.prepare:
+   before_script:
+    - |
+      echo "Account = $AWS_ACCOUNT_NAME | Account ID = $TARGET_AWS_ACCOUNT"
+
+auth:
+  stage: authenticate
+  extends: [.vault-aws-auth]
+  variables:
+    LSEG_PPE_VAULT: "true"  
+    AWS_ACCOUNT: "$TARGET_AWS_ACCOUNT"    
+  tags: ["LSEG"]
+  rules:
+    - if: $ENVIRONMENT_NAME != "---" &&  $ENVIRONMENT_NAME =~ /^(dev2|nfr|uat|prod)$/
+
+
 
 store_log_config:
+  needs:
+    - auth
+  tags: ["$RUNNER_TAG"]
+
   stage: store-log-config
-  image: amazon/aws-cli:latest
+  image: registry.dx1.lseg.com/app/app-50339/iac-temp/psl-base-docker-image/psl/awscli-docker:latest  # Using AWS CLI Docker image
   variables:
     PACKAGE_NAME:
-      description: "Enter the package name"
       value: ""  # Default is empty; user must enter a value
     LOG_LEVEL:
-      description: "Enter log level (e.g., INFO, DEBUG, WARN)"
       value: "INFO"  # Default value
     EXPIRY_TIME:
-      description: "Enter expiry time in milliseconds (e.g., 3600000 for 1 hour)"
       value: "3600000"  # Default value (1 hour)
   script:
+    - CURRENT_TIME=$(date +%s)
+    - EXPIRY_TIMESTAMP=$(($CURRENT_TIME + $EXPIRY_TIME / 1000))  # Convert milliseconds to seconds
     - echo "Storing log level configuration in AWS Parameter Store..."
     
     # Check if required variables are set
     - |
       if [[ -z "$PACKAGE_NAME" || -z "$LOG_LEVEL" || -z "$EXPIRY_TIME" ]]; then
-        echo "❌ ERROR: One or more required variables are missing!"
+        echo "❌ ERROR: One or more required variables are missing! Please provide PACKAGE_NAME, LOG_LEVEL, and EXPIRY_TIME."
         exit 1
       fi
     
@@ -78,37 +147,16 @@ store_log_config:
     # Store in AWS Systems Manager Parameter Store
     - |
       aws ssm put-parameter \
-        --name "/log-config/$PACKAGE_NAME" \
+        --name "$PARAMETER_PATH/$PACKAGE_NAME" \
         --value "$PARAMETER_VALUE" \
         --type "SecureString" \
         --overwrite \
-        --region "us-east-1"
+        --region "$AWS_REGION"
+        --policies "[{\"Type\":\"Expiration\",\"Version\":\"1.0\",\"Attributes\":{\"Timestamp\":\"$(date -u -d @$EXPIRY_TIMESTAMP +'%Y-%m-%dT%H:%M:%SZ')\"}}]"
+
     
     - echo "✅ Log level configuration stored successfully!"
-  
-  when: manual  # Makes it a manual trigger job
+    
+  only:
+    - feature/FRPS-19759
 
-
-
-This job is stuck because the project doesn't have any runners online assigned to it.
-
-
-
-
-stages:
-  - configure-ssm
-
-configure-parameter-store:
-  stage: configure-ssm
-  script:
-    - CURRENT_TIME=$(date +%s)
-    - EXPIRY_TIMESTAMP=$(($CURRENT_TIME + $EXPIRY_TIME / 1000))  # Convert milliseconds to seconds
-
-    # Store Log Level
-    - aws ssm put-parameter --name "/config/${PACKAGE_NAME}" --value "${LOG_LEVEL}" --type "String" --overwrite \
-      --policies "[{\"Type\":\"Expiration\",\"Version\":\"1.0\",\"Attributes\":{\"Timestamp\":\"$(date -u -d @$EXPIRY_TIMESTAMP +'%Y-%m-%dT%H:%M:%SZ')\"}}]"
-
-  environment: production
-
-
- --policies: command not found
