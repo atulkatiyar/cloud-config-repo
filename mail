@@ -91,3 +91,21 @@ store_log_config:
 
 
 This job is stuck because the project doesn't have any runners online assigned to it.
+
+
+
+
+stages:
+  - configure-ssm
+
+configure-parameter-store:
+  stage: configure-ssm
+  script:
+    - CURRENT_TIME=$(date +%s)
+    - EXPIRY_TIMESTAMP=$(($CURRENT_TIME + $EXPIRY_TIME / 1000))  # Convert milliseconds to seconds
+
+    # Store Log Level
+    - aws ssm put-parameter --name "/config/${PACKAGE_NAME}" --value "${LOG_LEVEL}" --type "String" --overwrite \
+      --policies "[{\"Type\":\"Expiration\",\"Version\":\"1.0\",\"Attributes\":{\"Timestamp\":\"$(date -u -d @$EXPIRY_TIMESTAMP +'%Y-%m-%dT%H:%M:%SZ')\"}}]"
+
+  environment: production
