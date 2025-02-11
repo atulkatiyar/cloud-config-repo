@@ -26,3 +26,13 @@ Please pay attention that the course consists of 2 chapters, kindly make sure yo
 AWS Lambda + CloudWatch Events
 
 storing a timestamp in AWS Systems Manager Parameter Store along with the key-value data. Then, use a scheduled cleanup job (e.g., AWS Lambda + CloudWatch Events) to remove expired parameters.
+
+
+Hi Atul, just a quick heads-up that we've made a minor alteration to the Log Level Controller architecture. In addition to writing the updated log level to Param Store, the GitLab pipeline should also now hit a wehook HTTP(s) endpoint on the log level controller. The webhook endpoint will then trigger the log level controller app to fetch the updated log level from the param store. It should no longer poll the param store for cost reasons meaning that it will need to persist the log level in-memory for the TTL recorded in the param store on-collection. In a situation when the log level controller starts up, the first thing it should do is check param store to see if there is a set log level. This covers a situation where the controller may potentially crash. I've updated the architecture diagram here and sequenced the key interactions: RFC - Log Level Controller - Index Platform and Portfolio Services (IPPS) - Confluence
+
+
+
+Hi Katiyar, Atulkumar (External), I don't think there's a need to remove / clean up the expired parameter. Simply recording the expiry date/time is sufficient. The log level controller will know whether to use or ignore set log level depending on whether the expiry date/time has passed.
+ 
+Let's keep it simple for now given that this is the only use-case we currently have for dynamic configs with an expiry.
+ 
