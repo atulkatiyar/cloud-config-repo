@@ -101,4 +101,7 @@ public class LogConfigController {
         ((ch.qos.logback.classic.Logger) logger).setLevel(Level.toLevel(logLevel));
     }
 }
+
+
+Incorrect type. Expected "string | array".
  
