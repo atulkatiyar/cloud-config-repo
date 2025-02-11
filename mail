@@ -35,4 +35,70 @@ Hi Atul, just a quick heads-up that we've made a minor alteration to the Log Lev
 Hi Katiyar, Atulkumar (External), I don't think there's a need to remove / clean up the expired parameter. Simply recording the expiry date/time is sufficient. The log level controller will know whether to use or ignore set log level depending on whether the expiry date/time has passed.
  
 Let's keep it simple for now given that this is the only use-case we currently have for dynamic configs with an expiry.
+
+
+
+stages:
+  - save-config
+  - notify-app
+
+variables:
+  PACKAGE_NAME: "default-package"
+  LOG_LEVEL: "INFO"
+  EXPIRY_TIME: "600000"  # 10 minutes (in milliseconds)
+  WEBHOOK_URL: "https://your-spring-boot-app.com/api/refresh-log-level"
+
+save-config:
+  stage: save-config
+  script:
+    - echo "Storing log level in AWS Parameter Store..."
+    - TIMESTAMP=$(date +%s)  # Capture current timestamp
+    - aws ssm put-parameter --name "/log-config/${PACKAGE_NAME}" --value "${LOG_LEVEL}" --type "String" --overwrite
+    - aws ssm put-parameter --name "/log-config/${PACKAGE_NAME}/expiry" --value "$((TIMESTAMP + (EXPIRY_TIME / 1000)))" --type "String" --overwrite
+    - echo "Parameter stored successfully!"
+
+notify-app:
+  stage: notify-app
+  script:
+    - echo "Triggering webhook to refresh log level..."
+    - RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" -d '{"packageName": "'"$PACKAGE_NAME"'"}')
+    - if [ "$RESPONSE" -eq 200 ]; then
+        echo "Webhook successfully triggered!";
+      else
+        echo "Webhook failed with response code $RESPONSE";
+        exit 1;
+      fi
+
+
+
+@RestController
+@RequestMapping("/api")
+public class LogConfigController {
+
+    @PostMapping("/refresh-log-level")
+    public ResponseEntity<String> refreshLogLevel(@RequestBody Map<String, String> request) {
+        String packageName = request.get("packageName");
+        if (packageName == null || packageName.isEmpty()) {
+            return ResponseEntity.badRequest().body("Package name is missing");
+        }
+
+        try {
+            AWSSimpleSystemsManagement ssmClient = AWSSimpleSystemsManagementClientBuilder.defaultClient();
+            GetParameterRequest requestLogLevel = new GetParameterRequest().withName("/log-config/" + packageName);
+            String logLevel = ssmClient.getParameter(requestLogLevel).getParameter().getValue();
+
+            // Call service to update log level dynamically
+            updateLogLevel(packageName, logLevel);
+
+            return ResponseEntity.ok("Log level updated for package: " + packageName);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error fetching log level: " + e.getMessage());
+        }
+    }
+
+    private void updateLogLevel(String packageName, String logLevel) {
+        Logger logger = LoggerFactory.getLogger(packageName);
+        ((ch.qos.logback.classic.Logger) logger).setLevel(Level.toLevel(logLevel));
+    }
+}
  
