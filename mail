@@ -121,3 +121,6 @@ notify-app:
         echo "Webhook failed with response code $RESPONSE"
         exit 1
       fi
+
+
+Error fetching log level: Service returned error code ParameterNotFound (Service: Ssm, Status Code: 400, Request ID: 7d4ebf71-bdff-4e9c-be11-d72932fc5561)
