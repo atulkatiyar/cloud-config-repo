@@ -103,5 +103,21 @@ public class LogConfigController {
 }
 
 
-Incorrect type. Expected "string | array".
  
+
+notify-app:
+  stage: notify-app
+  script:
+    - echo "Triggering webhook to refresh log level..."
+    - >-
+      RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" 
+      -X POST "$WEBHOOK_URL" 
+      -H "Content-Type: application/json" 
+      -d "{\"packageName\":\"$PACKAGE_NAME\"}")
+    - |
+      if [ "$RESPONSE" -eq 200 ]; then
+        echo "Webhook successfully triggered!"
+      else
+        echo "Webhook failed with response code $RESPONSE"
+        exit 1
+      fi
