@@ -127,3 +127,26 @@ Error fetching log level: Service returned error code ParameterNotFound (Service
 
 GetParameterRequest requestLogLevel = GetParameterRequest.builder().name("/log-config/" + packageName).build();
             String logLevel = ssmClient.getParameter(requestLogLevel).parameter().value();
+
+
+List<String> parameterValues = new ArrayList<>();
+        String nextToken = null;
+
+        do {
+            GetParametersByPathRequest request = GetParametersByPathRequest.builder()
+                    .path(path)
+                    .recursive(true)   // Fetch all nested parameters
+                    .withDecryption(true) // If SecureString, decrypt values
+                    .maxResults(10)    // Fetch in batches (optional)
+                    .nextToken(nextToken)
+                    .build();
+
+            GetParametersByPathResponse response = ssmClient.getParametersByPath(request);
+            for (Parameter parameter : response.parameters()) {
+                parameterValues.add(parameter.name() + " = " + parameter.value());
+            }
+
+            nextToken = response.nextToken();
+        } while (nextToken != null);
+
+        return parameterValues;
