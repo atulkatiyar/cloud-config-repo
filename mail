@@ -150,3 +150,28 @@ List<String> parameterValues = new ArrayList<>();
         } while (nextToken != null);
 
         return parameterValues;
+
+
+
+public boolean isParameterExpired(String expiryTimestamp) {
+        try {
+            // Parse the expiry timestamp (assuming it's in Unix timestamp format)
+            long expiryTimeInSeconds = Long.parseLong(expiryTimestamp);
+            
+            // Convert Unix timestamp to LocalDateTime
+            LocalDateTime expiryDateTime = LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(expiryTimeInSeconds),
+                ZoneId.systemDefault()
+            );
+            
+            // Get current time
+            LocalDateTime currentDateTime = LocalDateTime.now();
+            
+            // Compare times
+            return currentDateTime.isAfter(expiryDateTime);
+            
+        } catch (NumberFormatException e) {
+            // Handle invalid timestamp format
+            throw new IllegalArgumentException("Invalid expiry timestamp format: " + expiryTimestamp, e);
+        }
+    }
