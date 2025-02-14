@@ -232,3 +232,174 @@ class LogConfigControllerTest {
     }
 }
 Last edited just now
+
+
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.http.ResponseEntity;
+import org.springframework.ui.freemarker.FreeMarkerConfigurationFactoryBean;
+import freemarker.template.Configuration;
+import freemarker.template.Template;
+
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+class LogConfigControllerTest {
+
+    @Mock
+    private FreeMarkerConfigurationFactoryBean freemarkerConfig;
+    
+    @Mock
+    private ConfigurationService configurationService;
+    
+    @Mock
+    private CacheEntryManager cacheEntryManager;
+    
+    @Mock
+    private Configuration freeMarkerConfiguration;
+    
+    @Mock
+    private Template template;
+
+    private LogConfigController logConfigController;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        MockitoAnnotations.openMocks(this);
+        logConfigController = new LogConfigController(freemarkerConfig, configurationService, cacheEntryManager);
+        
+        // Setup freemarker configuration
+        when(freemarkerConfig.createConfiguration()).thenReturn(freeMarkerConfiguration);
+        when(freeMarkerConfiguration.getTemplate(anyString())).thenReturn(template);
+        doAnswer(invocation -> {
+            // Simulate template processing by returning a simple XML
+            StringWriter writer = (StringWriter) invocation.getArgument(1);
+            writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Configuration></Configuration>");
+            return null;
+        }).when(template).process(any(), any(StringWriter.class));
+    }
+
+    @Test
+    void generateLog4jXml_EmptyCache_ReturnsDefaultConfiguration() throws IOException {
+        // Given
+        when(cacheEntryManager.getAllCacheEntries()).thenReturn(Collections.emptyList());
+
+        // When
+        ResponseEntity<String> response = logConfigController.generateLog4jXml();
+
+        // Then
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCodeValue());
+        String xmlContent = response.getBody();
+        assertNotNull(xmlContent);
+        assertTrue(xmlContent.contains("<?xml"));
+        
+        // Verify default map was used
+        verify(template).process(argThat(map -> 
+            map instanceof Map && ((Map) map).containsKey("root") && 
+            "WARN".equals(((Map) map).get("root"))), 
+            any(StringWriter.class));
+    }
+
+    @Test
+    void generateLog4jXml_WithValidCache_ReturnsConfiguredXml() throws IOException {
+        // Given
+        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
+        data.put("root", new ConfigurationParameterResponse("ROOT", "DEBUG", "3600", "9999999999")); // Future timestamp
+        data.put("com.example", new ConfigurationParameterResponse("com.example", "INFO", "3600", "9999999999"));
+        
+        CacheEntry cacheEntry = new CacheEntry("packageLogLevels", data);
+        when(cacheEntryManager.getAllCacheEntries()).thenReturn(List.of(cacheEntry));
+        when(configurationService.isParameterExpired(anyString())).thenReturn(true);
+
+        // When
+        ResponseEntity<String> response = logConfigController.generateLog4jXml();
+
+        // Then
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCodeValue());
+        verify(template).process(argThat(map -> {
+            Map<String, Object> dataMap = (Map<String, Object>) map;
+            return dataMap.containsKey("packageLogLevels") &&
+                   dataMap.containsKey("root") &&
+                   "DEBUG".equals(dataMap.get("root"));
+        }), any(StringWriter.class));
+    }
+
+    @Test
+    void generateLog4jXml_WithExpiredEntries_FiltersOutExpired() throws IOException {
+        // Given
+        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
+        data.put("root", new ConfigurationParameterResponse("ROOT", "DEBUG", "3600", "9999999999"));
+        data.put("com.example", new ConfigurationParameterResponse("com.example", "INFO", "3600", "1000000")); // Past timestamp
+        
+        CacheEntry cacheEntry = new CacheEntry("packageLogLevels", data);
+        when(cacheEntryManager.getAllCacheEntries()).thenReturn(List.of(cacheEntry));
+        
+        // Mock expiry check - root valid, com.example expired
+        when(configurationService.isParameterExpired("9999999999")).thenReturn(true);
+        when(configurationService.isParameterExpired("1000000")).thenReturn(false);
+
+        // When
+        ResponseEntity<String> response = logConfigController.generateLog4jXml();
+
+        // Then
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCodeValue());
+        verify(template).process(argThat(map -> {
+            Map<String, Object> dataMap = (Map<String, Object>) map;
+            Map<String, Object> packageLevels = (Map<String, Object>) dataMap.get("packageLogLevels");
+            return dataMap.containsKey("root") &&
+                   "DEBUG".equals(dataMap.get("root")) &&
+                   (packageLevels == null || !packageLevels.containsKey("com.example"));
+        }), any(StringWriter.class));
+    }
+
+    @Test
+    void generateLog4jXml_WithTemplateError_ThrowsRuntimeException() throws IOException {
+        // Given
+        when(cacheEntryManager.getAllCacheEntries()).thenReturn(Collections.emptyList());
+        doThrow(new IOException("Template error")).when(template).process(any(), any(StringWriter.class));
+
+        // When & Then
+        assertThrows(RuntimeException.class, () -> 
+            logConfigController.generateLog4jXml()
+        );
+    }
+
+    @Test
+    void generateLog4jXml_WithMultiplePackages_ProcessesAllPackages() throws IOException {
+        // Given
+        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
+        data.put("root", new ConfigurationParameterResponse("ROOT", "DEBUG", "3600", "9999999999"));
+        data.put("com.example", new ConfigurationParameterResponse("com.example", "INFO", "3600", "9999999999"));
+        data.put("org.test", new ConfigurationParameterResponse("org.test", "ERROR", "3600", "9999999999"));
+        
+        CacheEntry cacheEntry = new CacheEntry("packageLogLevels", data);
+        when(cacheEntryManager.getAllCacheEntries()).thenReturn(List.of(cacheEntry));
+        when(configurationService.isParameterExpired(anyString())).thenReturn(true);
+
+        // When
+        ResponseEntity<String> response = logConfigController.generateLog4jXml();
+
+        // Then
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCodeValue());
+        verify(template).process(argThat(map -> {
+            Map<String, Object> dataMap = (Map<String, Object>) map;
+            Map<String, Object> packageLevels = (Map<String, Object>) dataMap.get("packageLogLevels");
+            return packageLevels != null &&
+                   packageLevels.containsKey("com.example") &&
+                   packageLevels.containsKey("org.test") &&
+                   "INFO".equals(packageLevels.get("com.example")) &&
+                   "ERROR".equals(packageLevels.get("org.test"));
+        }), any(StringWriter.class));
+    }
+}
