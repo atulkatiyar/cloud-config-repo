@@ -1,102 +1,233 @@
-package com.lseg.ipps.solutions.shared.config;
+package com.lseg.ipps.solutions.shared.service;
 
-import com.github.benmanes.caffeine.cache.Cache;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lseg.ipps.solutions.shared.model.CacheEntry;
+import com.lseg.ipps.solutions.shared.request.ConfigurationParameterResponse;
+import com.lseg.ipps.solutions.shared.service.cache.CacheEntryManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.services.ssm.SsmClient;
+import software.amazon.awssdk.services.ssm.model.GetParametersByPathRequest;
+import software.amazon.awssdk.services.ssm.model.GetParametersByPathResponse;
+import software.amazon.awssdk.services.ssm.model.Parameter;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
-@SpringBootTest(classes = {CacheConfig.class})
-@TestPropertySource(properties = {
-    "app.cache.config.maxSize=100"
-})
-class CacheConfigTest {
+@ExtendWith(MockitoExtension.class)
+class ConfigurationServiceTest {
 
-    @Autowired
-    private Cache<String, CacheEntry> cacheStorage;
+    @Mock
+    private CacheEntryManager cacheEntryManager;
 
-    @Test
-    void testCacheInitialization() {
-        assertNotNull(cacheStorage, "Cache should be initialized");
+    @Mock
+    private SsmClient ssmClient;
+
+    private ConfigurationService configurationService;
+    private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        configurationService = new ConfigurationService(cacheEntryManager);
+        objectMapper = new ObjectMapper();
     }
 
     @Test
-    void testCacheMaxSize() {
-        // Fill cache beyond max size
-        for (int i = 0; i < 150; i++) {
-            cacheStorage.put("key" + i, new CacheEntry("value" + i));
-        }
-
-        // Verify size doesn't exceed maximum
-        long cacheSize = cacheStorage.estimatedSize();
-        assertTrue(cacheSize <= 100, "Cache size should not exceed configured maximum");
-    }
-
-    @Test
-    void testCacheOperations() {
-        // Test put and get
-        CacheEntry entry = new CacheEntry("testValue");
-        cacheStorage.put("testKey", entry);
+    void testFetchAndPersistUpdatedLogLevel_Success() throws JsonProcessingException {
+        // Setup test data
+        long currentTime = LocalDateTime.now().minusDays(1)
+                .atZone(ZoneId.of("UTC")).toInstant().getEpochSecond();
         
-        CacheEntry retrieved = cacheStorage.getIfPresent("testKey");
-        assertNotNull(retrieved, "Retrieved entry should not be null");
-        assertEquals("testValue", retrieved.getValue(), "Retrieved value should match stored value");
+        ConfigurationParameterResponse rootResponse = new ConfigurationParameterResponse(
+                "ROOT", "INFO", "1", String.valueOf(currentTime));
+        ConfigurationParameterResponse appResponse = new ConfigurationParameterResponse(
+                "com.lseg", "DEBUG", "1", String.valueOf(currentTime));
+        
+        String rootJson = objectMapper.writeValueAsString(rootResponse);
+        String appJson = objectMapper.writeValueAsString(appResponse);
 
-        // Test removal
-        cacheStorage.invalidate("testKey");
-        assertNull(cacheStorage.getIfPresent("testKey"), "Entry should be removed after invalidation");
+        // Mock SSM response
+        Parameter rootParameter = Parameter.builder().value(rootJson).build();
+        Parameter appParameter = Parameter.builder().value(appJson).build();
+        
+        GetParametersByPathResponse ssmResponse = GetParametersByPathResponse.builder()
+                .parameters(Arrays.asList(rootParameter, appParameter))
+                .nextToken(null)
+                .build();
+
+        when(ssmClient.getParametersByPath(any(GetParametersByPathRequest.class)))
+                .thenReturn(ssmResponse);
+
+        // Execute
+        try (var mockedStatic = mockStatic(SsmClient.class)) {
+            mockedStatic.when(() -> SsmClient.builder())
+                    .thenReturn(SsmClient.builder().region(software.amazon.awssdk.regions.Region.EU_WEST_1));
+            
+            String result = configurationService.fetchAndPersistUpdatedLogLevel();
+
+            // Verify
+            assertEquals("success", result);
+            
+            ArgumentCaptor<CacheEntry> cacheEntryCaptor = ArgumentCaptor.forClass(CacheEntry.class);
+            verify(cacheEntryManager).saveEntry(cacheEntryCaptor.capture());
+            
+            CacheEntry capturedEntry = cacheEntryCaptor.getValue();
+            assertEquals(ConfigurationService.LOGGING_LEVELS, capturedEntry.getKey());
+            
+            @SuppressWarnings("unchecked")
+            Map<String, ConfigurationParameterResponse> data = (Map<String, ConfigurationParameterResponse>) capturedEntry.getValue();
+            assertTrue(data.containsKey(ConfigurationService.ROOT_LEVEL_KEY));
+            assertTrue(data.containsKey("com.lseg"));
+        }
     }
 
     @Test
-    void testCacheEviction() {
-        // Fill cache to max
-        for (int i = 0; i < 100; i++) {
-            cacheStorage.put("key" + i, new CacheEntry("value" + i));
-        }
+    void testFetchAndPersistUpdatedLogLevel_Exception() {
+        // Mock SSM client to throw exception
+        when(ssmClient.getParametersByPath(any(GetParametersByPathRequest.class)))
+                .thenThrow(new RuntimeException("AWS Error"));
 
-        // Add one more entry to trigger eviction
-        cacheStorage.put("newKey", new CacheEntry("newValue"));
-
-        // Verify some earlier entries have been evicted
-        boolean hasEviction = false;
-        for (int i = 0; i < 100; i++) {
-            if (cacheStorage.getIfPresent("key" + i) == null) {
-                hasEviction = true;
-                break;
-            }
+        try (var mockedStatic = mockStatic(SsmClient.class)) {
+            mockedStatic.when(() -> SsmClient.builder())
+                    .thenReturn(SsmClient.builder().region(software.amazon.awssdk.regions.Region.EU_WEST_1));
+            
+            String result = configurationService.fetchAndPersistUpdatedLogLevel();
+            
+            assertEquals("failed", result);
+            verify(cacheEntryManager, never()).saveEntry(any());
         }
-        assertTrue(hasEviction, "Cache should have evicted some entries");
     }
 
-    // Test configuration for different max size
-    @TestConfiguration
-    static class AlternateCacheConfigTest {
+    @Test
+    void testIsParameterExpired_ExpiredParameter() {
+        // Setup expired timestamp (yesterday)
+        long expiredTimestamp = LocalDateTime.now().minusDays(1)
+                .atZone(ZoneId.of("UTC")).toInstant().getEpochSecond();
         
-        @Bean
-        @Primary
-        public Cache<String, CacheEntry> alternateCacheStorage() {
-            return Caffeine.newBuilder()
-                    .maximumSize(50)
+        boolean result = configurationService.isParameterExpired(String.valueOf(expiredTimestamp));
+        assertTrue(result, "Parameter should be expired");
+    }
+
+    @Test
+    void testIsParameterExpired_ValidParameter() {
+        // Setup future timestamp (tomorrow)
+        long validTimestamp = LocalDateTime.now().plusDays(1)
+                .atZone(ZoneId.of("UTC")).toInstant().getEpochSecond();
+        
+        boolean result = configurationService.isParameterExpired(String.valueOf(validTimestamp));
+        assertFalse(result, "Parameter should not be expired");
+    }
+
+    @Test
+    void testIsParameterExpired_InvalidFormat() {
+        assertThrows(IllegalArgumentException.class,
+                () -> configurationService.isParameterExpired("invalid-timestamp"),
+                "Should throw IllegalArgumentException for invalid timestamp format");
+    }
+
+    @Test
+    void testPersistDataInMemory_WithNoRootLevel() throws JsonProcessingException {
+        // Setup test data without ROOT level
+        long currentTime = LocalDateTime.now().minusDays(1)
+                .atZone(ZoneId.of("UTC")).toInstant().getEpochSecond();
+        
+        ConfigurationParameterResponse appResponse = new ConfigurationParameterResponse(
+                "com.lseg", "DEBUG", "1", String.valueOf(currentTime));
+        
+        List<ConfigurationParameterResponse> parameterList = List.of(appResponse);
+
+        // Execute through public method to test private method
+        try (var mockedStatic = mockStatic(SsmClient.class)) {
+            mockedStatic.when(() -> SsmClient.builder())
+                    .thenReturn(SsmClient.builder().region(software.amazon.awssdk.regions.Region.EU_WEST_1));
+            
+            GetParametersByPathResponse ssmResponse = GetParametersByPathResponse.builder()
+                    .parameters(List.of(Parameter.builder()
+                            .value(objectMapper.writeValueAsString(appResponse))
+                            .build()))
+                    .nextToken(null)
                     .build();
+
+            when(ssmClient.getParametersByPath(any(GetParametersByPathRequest.class)))
+                    .thenReturn(ssmResponse);
+
+            configurationService.fetchAndPersistUpdatedLogLevel();
+
+            // Verify default ROOT level was created
+            ArgumentCaptor<CacheEntry> cacheEntryCaptor = ArgumentCaptor.forClass(CacheEntry.class);
+            verify(cacheEntryManager).saveEntry(cacheEntryCaptor.capture());
+            
+            CacheEntry capturedEntry = cacheEntryCaptor.getValue();
+            @SuppressWarnings("unchecked")
+            Map<String, ConfigurationParameterResponse> data = (Map<String, ConfigurationParameterResponse>) capturedEntry.getValue();
+            
+            assertTrue(data.containsKey(ConfigurationService.ROOT_LEVEL_KEY));
+            assertEquals("WARN", data.get(ConfigurationService.ROOT_LEVEL_KEY).logLevel());
         }
     }
 
     @Test
-    void testDifferentMaxSize() {
-        Cache<String, CacheEntry> alternateCache = new AlternateCacheConfigTest().alternateCacheStorage();
+    void testFetchAndPersistUpdatedLogLevel_WithPagination() throws JsonProcessingException {
+        // Setup test data
+        long currentTime = LocalDateTime.now().minusDays(1)
+                .atZone(ZoneId.of("UTC")).toInstant().getEpochSecond();
         
-        // Fill beyond alternate max size
-        for (int i = 0; i < 75; i++) {
-            alternateCache.put("key" + i, new CacheEntry("value" + i));
-        }
+        ConfigurationParameterResponse response1 = new ConfigurationParameterResponse(
+                "ROOT", "INFO", "1", String.valueOf(currentTime));
+        ConfigurationParameterResponse response2 = new ConfigurationParameterResponse(
+                "com.lseg", "DEBUG", "1", String.valueOf(currentTime));
+        
+        // Create two pages of responses
+        GetParametersByPathResponse firstPage = GetParametersByPathResponse.builder()
+                .parameters(List.of(Parameter.builder()
+                        .value(objectMapper.writeValueAsString(response1))
+                        .build()))
+                .nextToken("token")
+                .build();
+        
+        GetParametersByPathResponse secondPage = GetParametersByPathResponse.builder()
+                .parameters(List.of(Parameter.builder()
+                        .value(objectMapper.writeValueAsString(response2))
+                        .build()))
+                .nextToken(null)
+                .build();
 
-        assertTrue(alternateCache.estimatedSize() <= 50, 
-            "Alternate cache size should not exceed configured maximum");
+        try (var mockedStatic = mockStatic(SsmClient.class)) {
+            mockedStatic.when(() -> SsmClient.builder())
+                    .thenReturn(SsmClient.builder().region(software.amazon.awssdk.regions.Region.EU_WEST_1));
+            
+            when(ssmClient.getParametersByPath(any(GetParametersByPathRequest.class)))
+                    .thenReturn(firstPage)
+                    .thenReturn(secondPage);
+
+            String result = configurationService.fetchAndPersistUpdatedLogLevel();
+
+            assertEquals("success", result);
+            
+            // Verify both pages were processed
+            ArgumentCaptor<CacheEntry> cacheEntryCaptor = ArgumentCaptor.forClass(CacheEntry.class);
+            verify(cacheEntryManager).saveEntry(cacheEntryCaptor.capture());
+            
+            CacheEntry capturedEntry = cacheEntryCaptor.getValue();
+            @SuppressWarnings("unchecked")
+            Map<String, ConfigurationParameterResponse> data = (Map<String, ConfigurationParameterResponse>) capturedEntry.getValue();
+            
+            assertTrue(data.containsKey(ConfigurationService.ROOT_LEVEL_KEY));
+            assertTrue(data.containsKey("com.lseg"));
+        }
     }
 }
