@@ -1,0 +1,234 @@
+// ConfigurationServiceTest.java
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.services.ssm.SsmClient;
+import software.amazon.awssdk.services.ssm.model.GetParametersByPathRequest;
+import software.amazon.awssdk.services.ssm.model.GetParametersByPathResponse;
+import software.amazon.awssdk.services.ssm.model.Parameter;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+class ConfigurationServiceTest {
+
+    @Mock
+    private CacheEntryManager cacheEntryManager;
+    
+    @Mock
+    private SsmClient ssmClient;
+    
+    private ConfigurationService configurationService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        configurationService = new ConfigurationService(cacheEntryManager);
+    }
+
+    @Test
+    void isParameterExpired_WithFutureTimestamp_ReturnsFalse() {
+        // Given
+        LocalDateTime futureTime = LocalDateTime.now(ZoneId.of("UTC")).plusHours(1);
+        String futureTimestamp = String.valueOf(futureTime.atZone(ZoneId.of("UTC")).toEpochSecond());
+
+        // When
+        boolean result = configurationService.isParameterExpired(futureTimestamp);
+
+        // Then
+        assertFalse(result);
+    }
+
+    @Test
+    void isParameterExpired_WithPastTimestamp_ReturnsTrue() {
+        // Given
+        LocalDateTime pastTime = LocalDateTime.now(ZoneId.of("UTC")).minusHours(1);
+        String pastTimestamp = String.valueOf(pastTime.atZone(ZoneId.of("UTC")).toEpochSecond());
+
+        // When
+        boolean result = configurationService.isParameterExpired(pastTimestamp);
+
+        // Then
+        assertTrue(result);
+    }
+
+    @Test
+    void isParameterExpired_WithInvalidTimestamp_ThrowsException() {
+        // Given
+        String invalidTimestamp = "invalid";
+
+        // When & Then
+        assertThrows(IllegalArgumentException.class, () -> 
+            configurationService.isParameterExpired(invalidTimestamp)
+        );
+    }
+}
+
+// CacheEntryManagerTest.java
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class CacheEntryManagerTest {
+
+    @Mock
+    private Cache<String, CacheEntry> storage;
+
+    private CacheEntryManager cacheEntryManager;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        cacheEntryManager = new CacheEntryManager(storage);
+    }
+
+    @Test
+    void saveEntry_SuccessfulSave() {
+        // Given
+        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
+        CacheEntry entry = new CacheEntry("testKey", data);
+
+        // When
+        cacheEntryManager.saveEntry(entry);
+
+        // Then
+        verify(storage).put("testKey", entry);
+    }
+
+    @Test
+    void getEntry_ExistingEntry_ReturnsOptionalWithEntry() {
+        // Given
+        String key = "testKey";
+        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
+        CacheEntry entry = new CacheEntry(key, data);
+        when(storage.getIfPresent(key)).thenReturn(entry);
+
+        // When
+        Optional<CacheEntry> result = cacheEntryManager.getEntry(key);
+
+        // Then
+        assertTrue(result.isPresent());
+        assertEquals(entry, result.get());
+    }
+
+    @Test
+    void getEntry_NonExistingEntry_ReturnsEmptyOptional() {
+        // Given
+        String key = "nonExistentKey";
+        when(storage.getIfPresent(key)).thenReturn(null);
+
+        // When
+        Optional<CacheEntry> result = cacheEntryManager.getEntry(key);
+
+        // Then
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void deleteEntry_ExistingEntry_ReturnsTrue() {
+        // Given
+        String key = "testKey";
+        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
+        CacheEntry entry = new CacheEntry(key, data);
+        when(storage.getIfPresent(key)).thenReturn(entry);
+
+        // When
+        boolean result = cacheEntryManager.deleteEntry(key);
+
+        // Then
+        assertTrue(result);
+        verify(storage).invalidate(key);
+    }
+}
+
+// LogConfigControllerTest.java
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.http.ResponseEntity;
+import org.springframework.ui.freemarker.FreeMarkerConfigurationFactoryBean;
+
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class LogConfigControllerTest {
+
+    @Mock
+    private FreeMarkerConfigurationFactoryBean freemarkerConfig;
+    
+    @Mock
+    private ConfigurationService configurationService;
+    
+    @Mock
+    private CacheEntryManager cacheEntryManager;
+
+    private LogConfigController logConfigController;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        logConfigController = new LogConfigController(freemarkerConfig, configurationService, cacheEntryManager);
+    }
+
+    @Test
+    void getLog4jData_WithNoCache_ReturnsDefaultConfiguration() {
+        // Given
+        when(cacheEntryManager.getAllCacheEntries()).thenReturn(Collections.emptyList());
+
+        // When
+        ResponseEntity<ConfigurationParametersResponse> response = logConfigController.getLog4jData();
+
+        // Then
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCodeValue());
+        ConfigurationParametersResponse body = response.getBody();
+        assertNotNull(body);
+        assertEquals(1, body.configurationParameterResponseList().size());
+        assertEquals("root", body.configurationParameterResponseList().get(0).packageName());
+        assertEquals("WARN", body.configurationParameterResponseList().get(0).logLevel());
+    }
+
+    @Test
+    void refreshLogLevel_Success() {
+        // Given
+        when(configurationService.fetchAndPersistUpdatedLogLevel()).thenReturn("success");
+
+        // When
+        ResponseEntity<String> response = logConfigController.refreshLogLevel();
+
+        // Then
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCodeValue());
+        assertEquals("success", response.getBody());
+        verify(configurationService).fetchAndPersistUpdatedLogLevel();
+    }
+
+    @Test
+    void clearExistingLogging_Success() {
+        // When
+        ResponseEntity<Object> response = logConfigController.clearExistingLogging();
+
+        // Then
+        assertEquals(204, response.getStatusCodeValue());
+        verify(cacheEntryManager).deleteAllEntries();
+    }
+}
+Last edited just now
