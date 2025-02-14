@@ -1,405 +1,102 @@
-// ConfigurationServiceTest.java
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import software.amazon.awssdk.services.ssm.SsmClient;
-import software.amazon.awssdk.services.ssm.model.GetParametersByPathRequest;
-import software.amazon.awssdk.services.ssm.model.GetParametersByPathResponse;
-import software.amazon.awssdk.services.ssm.model.Parameter;
+package com.lseg.ipps.solutions.shared.config;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.List;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.lseg.ipps.solutions.shared.model.CacheEntry;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
-class ConfigurationServiceTest {
+@SpringBootTest(classes = {CacheConfig.class})
+@TestPropertySource(properties = {
+    "app.cache.config.maxSize=100"
+})
+class CacheConfigTest {
 
-    @Mock
-    private CacheEntryManager cacheEntryManager;
-    
-    @Mock
-    private SsmClient ssmClient;
-    
-    private ConfigurationService configurationService;
+    @Autowired
+    private Cache<String, CacheEntry> cacheStorage;
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        configurationService = new ConfigurationService(cacheEntryManager);
+    @Test
+    void testCacheInitialization() {
+        assertNotNull(cacheStorage, "Cache should be initialized");
     }
 
     @Test
-    void isParameterExpired_WithFutureTimestamp_ReturnsFalse() {
-        // Given
-        LocalDateTime futureTime = LocalDateTime.now(ZoneId.of("UTC")).plusHours(1);
-        String futureTimestamp = String.valueOf(futureTime.atZone(ZoneId.of("UTC")).toEpochSecond());
+    void testCacheMaxSize() {
+        // Fill cache beyond max size
+        for (int i = 0; i < 150; i++) {
+            cacheStorage.put("key" + i, new CacheEntry("value" + i));
+        }
 
-        // When
-        boolean result = configurationService.isParameterExpired(futureTimestamp);
-
-        // Then
-        assertFalse(result);
+        // Verify size doesn't exceed maximum
+        long cacheSize = cacheStorage.estimatedSize();
+        assertTrue(cacheSize <= 100, "Cache size should not exceed configured maximum");
     }
 
     @Test
-    void isParameterExpired_WithPastTimestamp_ReturnsTrue() {
-        // Given
-        LocalDateTime pastTime = LocalDateTime.now(ZoneId.of("UTC")).minusHours(1);
-        String pastTimestamp = String.valueOf(pastTime.atZone(ZoneId.of("UTC")).toEpochSecond());
-
-        // When
-        boolean result = configurationService.isParameterExpired(pastTimestamp);
-
-        // Then
-        assertTrue(result);
-    }
-
-    @Test
-    void isParameterExpired_WithInvalidTimestamp_ThrowsException() {
-        // Given
-        String invalidTimestamp = "invalid";
-
-        // When & Then
-        assertThrows(IllegalArgumentException.class, () -> 
-            configurationService.isParameterExpired(invalidTimestamp)
-        );
-    }
-}
-
-// CacheEntryManagerTest.java
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-class CacheEntryManagerTest {
-
-    @Mock
-    private Cache<String, CacheEntry> storage;
-
-    private CacheEntryManager cacheEntryManager;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        cacheEntryManager = new CacheEntryManager(storage);
-    }
-
-    @Test
-    void saveEntry_SuccessfulSave() {
-        // Given
-        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
-        CacheEntry entry = new CacheEntry("testKey", data);
-
-        // When
-        cacheEntryManager.saveEntry(entry);
-
-        // Then
-        verify(storage).put("testKey", entry);
-    }
-
-    @Test
-    void getEntry_ExistingEntry_ReturnsOptionalWithEntry() {
-        // Given
-        String key = "testKey";
-        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
-        CacheEntry entry = new CacheEntry(key, data);
-        when(storage.getIfPresent(key)).thenReturn(entry);
-
-        // When
-        Optional<CacheEntry> result = cacheEntryManager.getEntry(key);
-
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(entry, result.get());
-    }
-
-    @Test
-    void getEntry_NonExistingEntry_ReturnsEmptyOptional() {
-        // Given
-        String key = "nonExistentKey";
-        when(storage.getIfPresent(key)).thenReturn(null);
-
-        // When
-        Optional<CacheEntry> result = cacheEntryManager.getEntry(key);
-
-        // Then
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    void deleteEntry_ExistingEntry_ReturnsTrue() {
-        // Given
-        String key = "testKey";
-        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
-        CacheEntry entry = new CacheEntry(key, data);
-        when(storage.getIfPresent(key)).thenReturn(entry);
-
-        // When
-        boolean result = cacheEntryManager.deleteEntry(key);
-
-        // Then
-        assertTrue(result);
-        verify(storage).invalidate(key);
-    }
-}
-
-// LogConfigControllerTest.java
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.http.ResponseEntity;
-import org.springframework.ui.freemarker.FreeMarkerConfigurationFactoryBean;
-
-import java.util.*;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-class LogConfigControllerTest {
-
-    @Mock
-    private FreeMarkerConfigurationFactoryBean freemarkerConfig;
-    
-    @Mock
-    private ConfigurationService configurationService;
-    
-    @Mock
-    private CacheEntryManager cacheEntryManager;
-
-    private LogConfigController logConfigController;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        logConfigController = new LogConfigController(freemarkerConfig, configurationService, cacheEntryManager);
-    }
-
-    @Test
-    void getLog4jData_WithNoCache_ReturnsDefaultConfiguration() {
-        // Given
-        when(cacheEntryManager.getAllCacheEntries()).thenReturn(Collections.emptyList());
-
-        // When
-        ResponseEntity<ConfigurationParametersResponse> response = logConfigController.getLog4jData();
-
-        // Then
-        assertNotNull(response);
-        assertEquals(200, response.getStatusCodeValue());
-        ConfigurationParametersResponse body = response.getBody();
-        assertNotNull(body);
-        assertEquals(1, body.configurationParameterResponseList().size());
-        assertEquals("root", body.configurationParameterResponseList().get(0).packageName());
-        assertEquals("WARN", body.configurationParameterResponseList().get(0).logLevel());
-    }
-
-    @Test
-    void refreshLogLevel_Success() {
-        // Given
-        when(configurationService.fetchAndPersistUpdatedLogLevel()).thenReturn("success");
-
-        // When
-        ResponseEntity<String> response = logConfigController.refreshLogLevel();
-
-        // Then
-        assertNotNull(response);
-        assertEquals(200, response.getStatusCodeValue());
-        assertEquals("success", response.getBody());
-        verify(configurationService).fetchAndPersistUpdatedLogLevel();
-    }
-
-    @Test
-    void clearExistingLogging_Success() {
-        // When
-        ResponseEntity<Object> response = logConfigController.clearExistingLogging();
-
-        // Then
-        assertEquals(204, response.getStatusCodeValue());
-        verify(cacheEntryManager).deleteAllEntries();
-    }
-}
-Last edited just now
-
-
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.http.ResponseEntity;
-import org.springframework.ui.freemarker.FreeMarkerConfigurationFactoryBean;
-import freemarker.template.Configuration;
-import freemarker.template.Template;
-
-import java.util.*;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
-
-class LogConfigControllerTest {
-
-    @Mock
-    private FreeMarkerConfigurationFactoryBean freemarkerConfig;
-    
-    @Mock
-    private ConfigurationService configurationService;
-    
-    @Mock
-    private CacheEntryManager cacheEntryManager;
-    
-    @Mock
-    private Configuration freeMarkerConfiguration;
-    
-    @Mock
-    private Template template;
-
-    private LogConfigController logConfigController;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        MockitoAnnotations.openMocks(this);
-        logConfigController = new LogConfigController(freemarkerConfig, configurationService, cacheEntryManager);
+    void testCacheOperations() {
+        // Test put and get
+        CacheEntry entry = new CacheEntry("testValue");
+        cacheStorage.put("testKey", entry);
         
-        // Setup freemarker configuration
-        when(freemarkerConfig.createConfiguration()).thenReturn(freeMarkerConfiguration);
-        when(freeMarkerConfiguration.getTemplate(anyString())).thenReturn(template);
-        doAnswer(invocation -> {
-            // Simulate template processing by returning a simple XML
-            StringWriter writer = (StringWriter) invocation.getArgument(1);
-            writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Configuration></Configuration>");
-            return null;
-        }).when(template).process(any(), any(StringWriter.class));
+        CacheEntry retrieved = cacheStorage.getIfPresent("testKey");
+        assertNotNull(retrieved, "Retrieved entry should not be null");
+        assertEquals("testValue", retrieved.getValue(), "Retrieved value should match stored value");
+
+        // Test removal
+        cacheStorage.invalidate("testKey");
+        assertNull(cacheStorage.getIfPresent("testKey"), "Entry should be removed after invalidation");
     }
 
     @Test
-    void generateLog4jXml_EmptyCache_ReturnsDefaultConfiguration() throws IOException {
-        // Given
-        when(cacheEntryManager.getAllCacheEntries()).thenReturn(Collections.emptyList());
+    void testCacheEviction() {
+        // Fill cache to max
+        for (int i = 0; i < 100; i++) {
+            cacheStorage.put("key" + i, new CacheEntry("value" + i));
+        }
 
-        // When
-        ResponseEntity<String> response = logConfigController.generateLog4jXml();
+        // Add one more entry to trigger eviction
+        cacheStorage.put("newKey", new CacheEntry("newValue"));
 
-        // Then
-        assertNotNull(response);
-        assertEquals(200, response.getStatusCodeValue());
-        String xmlContent = response.getBody();
-        assertNotNull(xmlContent);
-        assertTrue(xmlContent.contains("<?xml"));
+        // Verify some earlier entries have been evicted
+        boolean hasEviction = false;
+        for (int i = 0; i < 100; i++) {
+            if (cacheStorage.getIfPresent("key" + i) == null) {
+                hasEviction = true;
+                break;
+            }
+        }
+        assertTrue(hasEviction, "Cache should have evicted some entries");
+    }
+
+    // Test configuration for different max size
+    @TestConfiguration
+    static class AlternateCacheConfigTest {
         
-        // Verify default map was used
-        verify(template).process(argThat(map -> 
-            map instanceof Map && ((Map) map).containsKey("root") && 
-            "WARN".equals(((Map) map).get("root"))), 
-            any(StringWriter.class));
+        @Bean
+        @Primary
+        public Cache<String, CacheEntry> alternateCacheStorage() {
+            return Caffeine.newBuilder()
+                    .maximumSize(50)
+                    .build();
+        }
     }
 
     @Test
-    void generateLog4jXml_WithValidCache_ReturnsConfiguredXml() throws IOException {
-        // Given
-        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
-        data.put("root", new ConfigurationParameterResponse("ROOT", "DEBUG", "3600", "9999999999")); // Future timestamp
-        data.put("com.example", new ConfigurationParameterResponse("com.example", "INFO", "3600", "9999999999"));
+    void testDifferentMaxSize() {
+        Cache<String, CacheEntry> alternateCache = new AlternateCacheConfigTest().alternateCacheStorage();
         
-        CacheEntry cacheEntry = new CacheEntry("packageLogLevels", data);
-        when(cacheEntryManager.getAllCacheEntries()).thenReturn(List.of(cacheEntry));
-        when(configurationService.isParameterExpired(anyString())).thenReturn(true);
+        // Fill beyond alternate max size
+        for (int i = 0; i < 75; i++) {
+            alternateCache.put("key" + i, new CacheEntry("value" + i));
+        }
 
-        // When
-        ResponseEntity<String> response = logConfigController.generateLog4jXml();
-
-        // Then
-        assertNotNull(response);
-        assertEquals(200, response.getStatusCodeValue());
-        verify(template).process(argThat(map -> {
-            Map<String, Object> dataMap = (Map<String, Object>) map;
-            return dataMap.containsKey("packageLogLevels") &&
-                   dataMap.containsKey("root") &&
-                   "DEBUG".equals(dataMap.get("root"));
-        }), any(StringWriter.class));
-    }
-
-    @Test
-    void generateLog4jXml_WithExpiredEntries_FiltersOutExpired() throws IOException {
-        // Given
-        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
-        data.put("root", new ConfigurationParameterResponse("ROOT", "DEBUG", "3600", "9999999999"));
-        data.put("com.example", new ConfigurationParameterResponse("com.example", "INFO", "3600", "1000000")); // Past timestamp
-        
-        CacheEntry cacheEntry = new CacheEntry("packageLogLevels", data);
-        when(cacheEntryManager.getAllCacheEntries()).thenReturn(List.of(cacheEntry));
-        
-        // Mock expiry check - root valid, com.example expired
-        when(configurationService.isParameterExpired("9999999999")).thenReturn(true);
-        when(configurationService.isParameterExpired("1000000")).thenReturn(false);
-
-        // When
-        ResponseEntity<String> response = logConfigController.generateLog4jXml();
-
-        // Then
-        assertNotNull(response);
-        assertEquals(200, response.getStatusCodeValue());
-        verify(template).process(argThat(map -> {
-            Map<String, Object> dataMap = (Map<String, Object>) map;
-            Map<String, Object> packageLevels = (Map<String, Object>) dataMap.get("packageLogLevels");
-            return dataMap.containsKey("root") &&
-                   "DEBUG".equals(dataMap.get("root")) &&
-                   (packageLevels == null || !packageLevels.containsKey("com.example"));
-        }), any(StringWriter.class));
-    }
-
-    @Test
-    void generateLog4jXml_WithTemplateError_ThrowsRuntimeException() throws IOException {
-        // Given
-        when(cacheEntryManager.getAllCacheEntries()).thenReturn(Collections.emptyList());
-        doThrow(new IOException("Template error")).when(template).process(any(), any(StringWriter.class));
-
-        // When & Then
-        assertThrows(RuntimeException.class, () -> 
-            logConfigController.generateLog4jXml()
-        );
-    }
-
-    @Test
-    void generateLog4jXml_WithMultiplePackages_ProcessesAllPackages() throws IOException {
-        // Given
-        Map<String, ConfigurationParameterResponse> data = new HashMap<>();
-        data.put("root", new ConfigurationParameterResponse("ROOT", "DEBUG", "3600", "9999999999"));
-        data.put("com.example", new ConfigurationParameterResponse("com.example", "INFO", "3600", "9999999999"));
-        data.put("org.test", new ConfigurationParameterResponse("org.test", "ERROR", "3600", "9999999999"));
-        
-        CacheEntry cacheEntry = new CacheEntry("packageLogLevels", data);
-        when(cacheEntryManager.getAllCacheEntries()).thenReturn(List.of(cacheEntry));
-        when(configurationService.isParameterExpired(anyString())).thenReturn(true);
-
-        // When
-        ResponseEntity<String> response = logConfigController.generateLog4jXml();
-
-        // Then
-        assertNotNull(response);
-        assertEquals(200, response.getStatusCodeValue());
-        verify(template).process(argThat(map -> {
-            Map<String, Object> dataMap = (Map<String, Object>) map;
-            Map<String, Object> packageLevels = (Map<String, Object>) dataMap.get("packageLogLevels");
-            return packageLevels != null &&
-                   packageLevels.containsKey("com.example") &&
-                   packageLevels.containsKey("org.test") &&
-                   "INFO".equals(packageLevels.get("com.example")) &&
-                   "ERROR".equals(packageLevels.get("org.test"));
-        }), any(StringWriter.class));
+        assertTrue(alternateCache.estimatedSize() <= 50, 
+            "Alternate cache size should not exceed configured maximum");
     }
 }
