@@ -1,0 +1,53 @@
+# .gitlab-ci.yml
+variables:
+  AWS_DEFAULT_REGION: "us-east-1"
+  SOURCE_DB_CLUSTER: "your-source-cluster-identifier"
+  S3_BUCKET_NAME: "your-backup-bucket"
+  SOURCE_ACCOUNT: "your-source-account-id"
+  TARGET_ACCOUNT: "your-target-account-id"
+
+stages:
+  - backup
+  - restore
+
+# Job for source account operations
+backup-to-s3:
+  stage: backup
+  image: 
+    name: amazon/aws-cli:latest
+    entrypoint: [""]
+  before_script:
+    - aws configure set aws_access_key_id ${SOURCE_AWS_ACCESS_KEY_ID}
+    - aws configure set aws_secret_access_key ${SOURCE_AWS_SECRET_ACCESS_KEY}
+    - aws configure set region ${AWS_DEFAULT_REGION}
+    - chmod +x ./rds-backup-restore.sh
+  script:
+    - |
+      # Execute steps 1-7 from the script
+      ./rds-backup-restore.sh backup
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  tags:
+    - aws
+
+# Job for target account operations
+restore-from-s3:
+  stage: restore
+  image: 
+    name: amazon/aws-cli:latest
+    entrypoint: [""]
+  before_script:
+    - aws configure set aws_access_key_id ${TARGET_AWS_ACCESS_KEY_ID}
+    - aws configure set aws_secret_access_key ${TARGET_AWS_SECRET_ACCESS_KEY}
+    - aws configure set region ${AWS_DEFAULT_REGION}
+    - chmod +x ./rds-backup-restore.sh
+  script:
+    - |
+      # Execute steps 8-10 from the script
+      ./rds-backup-restore.sh restore
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  tags:
+    - aws
+  needs:
+    - backup-to-s3
