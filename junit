@@ -1,41 +1,25 @@
-./rds-backup-restore.sh: line 146: --engine: command not found
-./rds-backup-restore.sh: line 145: --db-cluster-identifier: command not found
-./rds-backup-restore.sh: line 147: --db-instance-class: command not found
-[cloudshell-user@ip-10-134-59-133 ~]$ nano rds-backup-restore.sh
-[cloudshell-user@ip-10-134-59-133 ~]$ ./rds-backup-restore.sh
-./rds-backup-restore.sh: line 2: SOURCE_DB_CLUSTER: command not found
-./rds-backup-restore.sh: line 3: S3_BUCKET_NAME: command not found
-./rds-backup-restore.sh: line 4: SOURCE_ACCOUNT: command not found
-./rds-backup-restore.sh: line 5: TARGET_ACCOUNT: command not found
-./rds-backup-restore.sh: line 6: BACKUP_NAME: command not found
-./rds-backup-restore.sh: line 7: AWS_REGION: command not found
-./rds-backup-restore.sh: line 9: Write-Host: command not found
-./rds-backup-restore.sh: line 11: --bucket: command not found
+#!/bin/bash
 
+# Variables - Replace these with your values
+SOURCE_DB_CLUSTER="your-source-cluster-identifier"
+S3_BUCKET_NAME="your-backup-bucket"
+SOURCE_ACCOUNT="your-source-account-id"
+TARGET_ACCOUNT="your-target-account-id"
+BACKUP_NAME="aurora-backup-$(date +%Y-%m-%d)"
+AWS_REGION="us-east-1"
 
-
-Take backup of DB and store it to in S3 bucket and replicate S3 bucket using cross account and then restore from S3
-
-# Variables for Source Account
-$SOURCE_DB_CLUSTER = "your-source-cluster-identifier"
-$S3_BUCKET_NAME = "your-backup-bucket"
-$SOURCE_ACCOUNT = "your-source-account-id"
-$TARGET_ACCOUNT = "your-target-account-id"
-$BACKUP_NAME = "aurora-backup-" + (Get-Date -Format "yyyy-MM-dd")
-$AWS_REGION = "us-east-1"
-
-Write-Host "Step 1: Create S3 bucket in source account"
-aws s3api create-bucket `
-    --bucket $S3_BUCKET_NAME `
+echo "Step 1: Create S3 bucket in source account"
+aws s3api create-bucket \
+    --bucket $S3_BUCKET_NAME \
     --region $AWS_REGION
 
-Write-Host "Step 2: Enable versioning on S3 bucket"
-aws s3api put-bucket-versioning `
-    --bucket $S3_BUCKET_NAME `
+echo "Step 2: Enable versioning on S3 bucket"
+aws s3api put-bucket-versioning \
+    --bucket $S3_BUCKET_NAME \
     --versioning-configuration Status=Enabled
 
-Write-Host "Step 3: Create bucket policy for cross-account access"
-$bucketPolicy = @"
+echo "Step 3: Create bucket policy for cross-account access"
+cat > bucket-policy.json << EOF
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -56,15 +40,14 @@ $bucketPolicy = @"
         }
     ]
 }
-"@
-$bucketPolicy | Out-File -FilePath "bucket-policy.json" -Encoding UTF8
+EOF
 
-aws s3api put-bucket-policy `
-    --bucket $S3_BUCKET_NAME `
+aws s3api put-bucket-policy \
+    --bucket $S3_BUCKET_NAME \
     --policy file://bucket-policy.json
 
-Write-Host "Step 4: Create IAM role for RDS access to S3"
-$rdsS3Role = @"
+echo "Step 4: Create IAM role for RDS access to S3"
+cat > rds-s3-role.json << EOF
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -77,15 +60,14 @@ $rdsS3Role = @"
         }
     ]
 }
-"@
-$rdsS3Role | Out-File -FilePath "rds-s3-role.json" -Encoding UTF8
+EOF
 
-aws iam create-role `
-    --role-name RDStoS3Role `
+aws iam create-role \
+    --role-name RDStoS3Role \
     --assume-role-policy-document file://rds-s3-role.json
 
-Write-Host "Step 5: Attach policy to allow RDS to access S3"
-$rdsS3Policy = @"
+echo "Step 5: Attach policy to allow RDS to access S3"
+cat > rds-s3-policy.json << EOF
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -103,28 +85,27 @@ $rdsS3Policy = @"
         }
     ]
 }
-"@
-$rdsS3Policy | Out-File -FilePath "rds-s3-policy.json" -Encoding UTF8
+EOF
 
-aws iam put-role-policy `
-    --role-name RDStoS3Role `
-    --policy-name RDStoS3Policy `
+aws iam put-role-policy \
+    --role-name RDStoS3Role \
+    --policy-name RDStoS3Policy \
     --policy-document file://rds-s3-policy.json
 
-Write-Host "Step 6: Export Aurora snapshot to S3"
-aws rds start-export-task `
-    --export-task-identifier $BACKUP_NAME `
-    --source-arn "arn:aws:rds:${AWS_REGION}:${SOURCE_ACCOUNT}:cluster-snapshot:${SOURCE_DB_CLUSTER}-snapshot" `
-    --s3-bucket-name $S3_BUCKET_NAME `
-    --iam-role-arn "arn:aws:iam::${SOURCE_ACCOUNT}:role/RDStoS3Role" `
+echo "Step 6: Export Aurora snapshot to S3"
+aws rds start-export-task \
+    --export-task-identifier $BACKUP_NAME \
+    --source-arn "arn:aws:rds:${AWS_REGION}:${SOURCE_ACCOUNT}:cluster-snapshot:${SOURCE_DB_CLUSTER}-snapshot" \
+    --s3-bucket-name $S3_BUCKET_NAME \
+    --iam-role-arn "arn:aws:iam::${SOURCE_ACCOUNT}:role/RDStoS3Role" \
     --kms-key-id "arn:aws:kms:${AWS_REGION}:${SOURCE_ACCOUNT}:key/your-kms-key-id"
 
-Write-Host "Step 7: Monitor export task status"
-aws rds describe-export-tasks `
+echo "Step 7: Monitor export task status"
+aws rds describe-export-tasks \
     --export-task-identifier $BACKUP_NAME
 
-Write-Host "Step 8: Create IAM role in target account for import"
-$targetRdsRole = @"
+echo "Step 8: Create IAM role in target account for import"
+cat > target-rds-role.json << EOF
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -137,30 +118,29 @@ $targetRdsRole = @"
         }
     ]
 }
-"@
-$targetRdsRole | Out-File -FilePath "target-rds-role.json" -Encoding UTF8
+EOF
 
-aws iam create-role `
-    --role-name S3toRDSRole `
+aws iam create-role \
+    --role-name S3toRDSRole \
     --assume-role-policy-document file://target-rds-role.json
 
-Write-Host "Step 9: Import backup from S3 to new Aurora cluster"
-aws rds restore-db-cluster-from-s3 `
-    --db-cluster-identifier new-aurora-cluster `
-    --engine aurora-mysql `
-    --master-username admin `
-    --master-user-password your-password `
-    --s3-bucket-name $S3_BUCKET_NAME `
-    --s3-prefix $BACKUP_NAME `
-    --source-engine aurora-mysql `
-    --source-engine-version 5.7.12 `
-    --vpc-security-group-ids sg-xxxxxxxx `
-    --db-subnet-group-name your-subnet-group `
+echo "Step 9: Import backup from S3 to new Aurora cluster"
+aws rds restore-db-cluster-from-s3 \
+    --db-cluster-identifier new-aurora-cluster \
+    --engine aurora-mysql \
+    --master-username admin \
+    --master-user-password your-password \
+    --s3-bucket-name $S3_BUCKET_NAME \
+    --s3-prefix $BACKUP_NAME \
+    --source-engine aurora-mysql \
+    --source-engine-version 5.7.12 \
+    --vpc-security-group-ids sg-xxxxxxxx \
+    --db-subnet-group-name your-subnet-group \
     --iam-role-arn "arn:aws:iam::${TARGET_ACCOUNT}:role/S3toRDSRole"
 
-Write-Host "Step 10: Create DB instance in the restored cluster"
-aws rds create-db-instance `
-    --db-instance-identifier new-aurora-instance `
-    --db-cluster-identifier new-aurora-cluster `
-    --engine aurora-mysql `
+echo "Step 10: Create DB instance in the restored cluster"
+aws rds create-db-instance \
+    --db-instance-identifier new-aurora-instance \
+    --db-cluster-identifier new-aurora-cluster \
+    --engine aurora-mysql \
     --db-instance-class db.r5.large
