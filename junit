@@ -14,7 +14,7 @@
 
 
 variables:
-  AWS_REGION: "eu-west-1"  # Change to your AWS region
+  AWS_REGION: "eu-west-1"
   PARAMETER_PATH: "/log-config"
   ENVIRONMENT_NAME:
     value: "---"
@@ -26,15 +26,14 @@ variables:
       - "---"
     description: "select the target environment"
   PACKAGE_NAME:
-    value: ""  # Default is empty; user must enter a value
+    value: ""
     description: "Enter the Package name."
   LOG_LEVEL:
     value: ""
-    description: "Enter Logging level for package name"  # Default value
+    description: "Enter Logging level for package name"
   EXPIRY_TIME:
     value: ""
-    description: "Enter the expiry time to reset the logging level(seconds)"  # Default value
-
+    description: "Enter the expiry time to reset the logging level(seconds)"
   WEBHOOK_URL: "http://100.99.124.149:8086/refresh-log-level"
 
 workflow:
@@ -63,7 +62,7 @@ workflow:
 
 include:  
   - project: 'ci/stable/security/vault/vault-integrator'
-    ref: '4.1.0' # https://gitlab.dx1.lseg.com/ci/stable/security/vault/vault-integrator/-/tree/master/
+    ref: '4.1.0'
     file:
       - 'templates/vault-integrator.yml'
 
@@ -71,6 +70,7 @@ stages:
   - authenticate
   - store-log-config
   - notify-app
+
 .prepare:
    before_script:
     - |
@@ -86,56 +86,80 @@ auth:
   rules:
     - if: $ENVIRONMENT_NAME != "---" &&  $ENVIRONMENT_NAME =~ /^(dev2|nfr|uat|prod)$/
 
-
-
 store_log_config:
   needs:
     - auth
   tags: ["$RUNNER_TAG"]
-
   stage: store-log-config
-  image: registry.dx1.lseg.com/app/app-50339/iac-temp/psl-base-docker-image/psl/awscli-docker:latest  # Using AWS CLI Docker image
+  image: registry.dx1.lseg.com/app/app-50339/iac-temp/psl-base-docker-image/psl/awscli-docker:latest
   variables:
     PACKAGE_NAME:
-      value: "root"  # Default is empty; user must enter a value
+      value: "root"
     LOG_LEVEL:
-      value: "WARN"  # Default value
+      value: "WARN"
     EXPIRY_TIME:
-      value: "3600000"  # Default value (1 hour)
+      value: "3600000"
   script:
-    - CURRENT_TIME=$(TZ=GMT date +%s)
-    - EXPIRY_TIMESTAMP=$(($CURRENT_TIME + ($EXPIRY_TIME)))  # Convert milliseconds to seconds
-    - echo "Storing log level configuration in AWS Parameter Store..."
-    
-    # Check if required variables are set
     - |
+      echo "Starting log configuration update process..."
+      
+      # Validate input parameters
       if [[ -z "$PACKAGE_NAME" || -z "$LOG_LEVEL" || -z "$EXPIRY_TIME" ]]; then
-        echo "❌ ERROR: One or more required variables are missing! Please provide PACKAGE_NAME, LOG_LEVEL, and EXPIRY_TIME."
+        echo "❌ ERROR: Required variables are missing! Please provide PACKAGE_NAME, LOG_LEVEL, and EXPIRY_TIME."
         exit 1
       fi
-    
-    # Construct the JSON payload
-    - PARAMETER_VALUE="{\"package\":\"$PACKAGE_NAME\",\"log_level\":\"$LOG_LEVEL\",\"expiry_time\":\"$EXPIRY_TIME\", \"expiry_timestamp\":\"$EXPIRY_TIMESTAMP\"}"
-    
-    # Store in AWS Systems Manager Parameter Store
-    - |
-      aws ssm put-parameter \
-        --name "$PARAMETER_PATH/$PACKAGE_NAME" \
-        --value "$PARAMETER_VALUE" \
-        --type "SecureString" \
-        --overwrite \
-        --region "$AWS_REGION"
-
-    
-    - echo "✅ Log level configuration stored successfully!"
-
+      
+      # Calculate timestamps
+      CURRENT_TIME=$(TZ=GMT date +%s)
+      EXPIRY_TIMESTAMP=$(($CURRENT_TIME + ($EXPIRY_TIME)))
+      
+      # Create JSON payload
+      PARAMETER_VALUE="{\"packageName\":\"$PACKAGE_NAME\",\"logLevel\":\"$LOG_LEVEL\",\"version\":\"1\",\"expiryTimestamp\":\"$EXPIRY_TIMESTAMP\"}"
+      
+      echo "Preparing to update parameter: $PARAMETER_PATH/$PACKAGE_NAME"
+      echo "Parameter value: $PARAMETER_VALUE"
+      
+      # Check if parameter exists
+      if aws ssm get-parameter --name "$PARAMETER_PATH/$PACKAGE_NAME" --region "$AWS_REGION" 2>/dev/null; then
+        echo "Existing parameter found. Proceeding with update..."
+      else
+        echo "Parameter doesn't exist. Creating new parameter..."
+      fi
+      
+      # Update or create parameter
+      if aws ssm put-parameter \
+          --name "$PARAMETER_PATH/$PACKAGE_NAME" \
+          --value "$PARAMETER_VALUE" \
+          --type "SecureString" \
+          --overwrite \
+          --region "$AWS_REGION"; then
+        echo "✅ Log configuration successfully updated in Parameter Store!"
+        
+        # Verify the update
+        echo "Verifying parameter update..."
+        STORED_PARAM=$(aws ssm get-parameter \
+          --name "$PARAMETER_PATH/$PACKAGE_NAME" \
+          --with-decryption \
+          --region "$AWS_REGION" \
+          --query "Parameter.Value" \
+          --output text)
+        
+        if [[ "$STORED_PARAM" == "$PARAMETER_VALUE" ]]; then
+          echo "✅ Parameter verification successful!"
+        else
+          echo "❌ WARNING: Parameter verification failed. Stored value might be different from intended value."
+          exit 1
+        fi
+      else
+        echo "❌ ERROR: Failed to update parameter in AWS Parameter Store"
+        exit 1
+      fi
 
 notify-app:
   stage: notify-app
   script:
-    - echo "Triggering webhook to refresh log level..."
     - |
-      # Add timeout and retry logic
+      echo "Triggering webhook to refresh log level..."
       MAX_RETRIES=3
       RETRY_COUNT=0
       SUCCESS=false
@@ -147,23 +171,21 @@ notify-app:
           -X POST "$WEBHOOK_URL" || echo "000")
         
         if [ "$RESPONSE" = "200" ]; then
-          echo "Webhook successfully triggered!"
+          echo "✅ Webhook successfully triggered!"
           SUCCESS=true
         elif [ "$RESPONSE" = "000" ]; then
           echo "Curl command failed, attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
           RETRY_COUNT=$((RETRY_COUNT + 1))
           [ $RETRY_COUNT -lt $MAX_RETRIES ] && sleep 5
         else
-          echo "Webhook failed with response code $RESPONSE"
+          echo "❌ Webhook failed with response code $RESPONSE"
           exit 1
         fi
       done
       
       if [ "$SUCCESS" = false ]; then
-        echo "Failed to trigger webhook after $MAX_RETRIES attempts"
+        echo "❌ Failed to trigger webhook after $MAX_RETRIES attempts"
         exit 1
       fi
-    
   only:
     - feature/FRPS-19759
-
