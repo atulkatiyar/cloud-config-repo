@@ -1,3 +1,5 @@
+Take backup of DB and store it to in S3 bucket and replicate S3 bucket using cross account and then restore from S3
+
 variables:
   AWS_REGION: "eu-west-1"
   PARAMETER_PATH: "/log-config"
