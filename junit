@@ -1,18 +1,3 @@
-<dependencies>
-    <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-core</artifactId>
-        <version>2.15.2</version>
-    </dependency>
-    <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        <version>2.15.2</version>
-    </dependency>
-</dependencies>
-
-
-
 variables:
   AWS_REGION: "eu-west-1"
   PARAMETER_PATH: "/log-config"
@@ -68,6 +53,7 @@ include:
 
 stages:
   - authenticate
+  - cleanup-params
   - store-log-config
   - notify-app
 
@@ -86,9 +72,48 @@ auth:
   rules:
     - if: $ENVIRONMENT_NAME != "---" &&  $ENVIRONMENT_NAME =~ /^(dev2|nfr|uat|prod)$/
 
-store_log_config:
+cleanup_parameters:
   needs:
     - auth
+  tags: ["$RUNNER_TAG"]
+  stage: cleanup-params
+  image: registry.dx1.lseg.com/app/app-50339/iac-temp/psl-base-docker-image/psl/awscli-docker:latest
+  script:
+    - |
+      echo "Starting cleanup of existing parameters under $PARAMETER_PATH..."
+      
+      # Get all parameters under the path
+      PARAMETERS=$(aws ssm get-parameters-by-path \
+        --path "$PARAMETER_PATH" \
+        --recursive \
+        --region "$AWS_REGION" \
+        --query "Parameters[*].Name" \
+        --output text)
+      
+      if [ -n "$PARAMETERS" ]; then
+        echo "Found existing parameters. Proceeding with deletion..."
+        
+        # Delete each parameter
+        for PARAM in $PARAMETERS; do
+          echo "Deleting parameter: $PARAM"
+          if aws ssm delete-parameter \
+            --name "$PARAM" \
+            --region "$AWS_REGION"; then
+            echo "✅ Successfully deleted parameter: $PARAM"
+          else
+            echo "❌ Failed to delete parameter: $PARAM"
+            exit 1
+          fi
+        done
+        
+        echo "✅ All existing parameters have been cleaned up successfully!"
+      else
+        echo "No existing parameters found under $PARAMETER_PATH"
+      fi
+
+store_log_config:
+  needs:
+    - cleanup_parameters
   tags: ["$RUNNER_TAG"]
   stage: store-log-config
   image: registry.dx1.lseg.com/app/app-50339/iac-temp/psl-base-docker-image/psl/awscli-docker:latest
@@ -101,7 +126,7 @@ store_log_config:
       value: "3600000"
   script:
     - |
-      echo "Starting log configuration update process..."
+      echo "Starting log configuration storage process..."
       
       # Validate input parameters
       if [[ -z "$PACKAGE_NAME" || -z "$LOG_LEVEL" || -z "$EXPIRY_TIME" ]]; then
@@ -116,27 +141,19 @@ store_log_config:
       # Create JSON payload
       PARAMETER_VALUE="{\"packageName\":\"$PACKAGE_NAME\",\"logLevel\":\"$LOG_LEVEL\",\"version\":\"1\",\"expiryTimestamp\":\"$EXPIRY_TIMESTAMP\"}"
       
-      echo "Preparing to update parameter: $PARAMETER_PATH/$PACKAGE_NAME"
+      echo "Creating new parameter: $PARAMETER_PATH/$PACKAGE_NAME"
       echo "Parameter value: $PARAMETER_VALUE"
       
-      # Check if parameter exists
-      if aws ssm get-parameter --name "$PARAMETER_PATH/$PACKAGE_NAME" --region "$AWS_REGION" 2>/dev/null; then
-        echo "Existing parameter found. Proceeding with update..."
-      else
-        echo "Parameter doesn't exist. Creating new parameter..."
-      fi
-      
-      # Update or create parameter
+      # Create new parameter
       if aws ssm put-parameter \
           --name "$PARAMETER_PATH/$PACKAGE_NAME" \
           --value "$PARAMETER_VALUE" \
           --type "SecureString" \
-          --overwrite \
           --region "$AWS_REGION"; then
-        echo "✅ Log configuration successfully updated in Parameter Store!"
+        echo "✅ Log configuration successfully stored in Parameter Store!"
         
-        # Verify the update
-        echo "Verifying parameter update..."
+        # Verify the parameter creation
+        echo "Verifying parameter creation..."
         STORED_PARAM=$(aws ssm get-parameter \
           --name "$PARAMETER_PATH/$PACKAGE_NAME" \
           --with-decryption \
@@ -151,7 +168,7 @@ store_log_config:
           exit 1
         fi
       else
-        echo "❌ ERROR: Failed to update parameter in AWS Parameter Store"
+        echo "❌ ERROR: Failed to store parameter in AWS Parameter Store"
         exit 1
       fi
 
