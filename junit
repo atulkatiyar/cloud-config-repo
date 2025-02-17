@@ -1,3 +1,19 @@
+./rds-backup-restore.sh: line 146: --engine: command not found
+./rds-backup-restore.sh: line 145: --db-cluster-identifier: command not found
+./rds-backup-restore.sh: line 147: --db-instance-class: command not found
+[cloudshell-user@ip-10-134-59-133 ~]$ nano rds-backup-restore.sh
+[cloudshell-user@ip-10-134-59-133 ~]$ ./rds-backup-restore.sh
+./rds-backup-restore.sh: line 2: SOURCE_DB_CLUSTER: command not found
+./rds-backup-restore.sh: line 3: S3_BUCKET_NAME: command not found
+./rds-backup-restore.sh: line 4: SOURCE_ACCOUNT: command not found
+./rds-backup-restore.sh: line 5: TARGET_ACCOUNT: command not found
+./rds-backup-restore.sh: line 6: BACKUP_NAME: command not found
+./rds-backup-restore.sh: line 7: AWS_REGION: command not found
+./rds-backup-restore.sh: line 9: Write-Host: command not found
+./rds-backup-restore.sh: line 11: --bucket: command not found
+
+
+
 Take backup of DB and store it to in S3 bucket and replicate S3 bucket using cross account and then restore from S3
 
 # Variables for Source Account
