@@ -1,210 +1,150 @@
 Take backup of DB and store it to in S3 bucket and replicate S3 bucket using cross account and then restore from S3
 
-variables:
-  AWS_REGION: "eu-west-1"
-  PARAMETER_PATH: "/log-config"
-  ENVIRONMENT_NAME:
-    value: "---"
-    options:
-      - "dev2"
-      - "nfr"
-      - "uat"
-      - "Prod"
-      - "---"
-    description: "select the target environment"
-  PACKAGE_NAME:
-    value: ""
-    description: "Enter the Package name."
-  LOG_LEVEL:
-    value: ""
-    description: "Enter Logging level for package name"
-  EXPIRY_TIME:
-    value: ""
-    description: "Enter the expiry time to reset the logging level(seconds)"
-  WEBHOOK_URL: "http://100.99.124.149:8086/refresh-log-level"
+# Variables for Source Account
+$SOURCE_DB_CLUSTER = "your-source-cluster-identifier"
+$S3_BUCKET_NAME = "your-backup-bucket"
+$SOURCE_ACCOUNT = "your-source-account-id"
+$TARGET_ACCOUNT = "your-target-account-id"
+$BACKUP_NAME = "aurora-backup-" + (Get-Date -Format "yyyy-MM-dd")
+$AWS_REGION = "us-east-1"
 
-workflow:
-   rules:
-     - if: $ENVIRONMENT_NAME =~ /^nfr.*/
-       variables:
-         RUNNER_TAG: "psl-epam-runner-qa"
-         TARGET_AWS_ACCOUNT: "332028679471"
-         AWS_ACCOUNT_NAME: "qa"
-     - if: $ENVIRONMENT_NAME =~ /^uat.*/
-       variables:
-         RUNNER_TAG: "psl-epam-runner-uat"
-         TARGET_AWS_ACCOUNT: "851725348656"
-         AWS_ACCOUNT_NAME: "uat"
-     - if: $ENVIRONMENT_NAME =~ /^prod.*/
-       variables:
-         RUNNER_TAG: "psl-epam-runner-prod"
-         TARGET_AWS_ACCOUNT: "730335637172"
-         AWS_ACCOUNT_NAME: "prod"
-     - if: $ENVIRONMENT_NAME =~ /^dev2.*/
-       variables:
-         RUNNER_TAG: "psl-epam-runner"
-         TARGET_AWS_ACCOUNT: "729500479720"
-         AWS_ACCOUNT_NAME: "dev"
-     - when: always
+Write-Host "Step 1: Create S3 bucket in source account"
+aws s3api create-bucket `
+    --bucket $S3_BUCKET_NAME `
+    --region $AWS_REGION
 
-include:  
-  - project: 'ci/stable/security/vault/vault-integrator'
-    ref: '4.1.0'
-    file:
-      - 'templates/vault-integrator.yml'
+Write-Host "Step 2: Enable versioning on S3 bucket"
+aws s3api put-bucket-versioning `
+    --bucket $S3_BUCKET_NAME `
+    --versioning-configuration Status=Enabled
 
-stages:
-  - authenticate
-  - cleanup-params
-  - store-log-config
-  - notify-app
+Write-Host "Step 3: Create bucket policy for cross-account access"
+$bucketPolicy = @"
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "CrossAccountAccess",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::${TARGET_ACCOUNT}:root"
+            },
+            "Action": [
+                "s3:GetObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::${S3_BUCKET_NAME}",
+                "arn:aws:s3:::${S3_BUCKET_NAME}/*"
+            ]
+        }
+    ]
+}
+"@
+$bucketPolicy | Out-File -FilePath "bucket-policy.json" -Encoding UTF8
 
-.prepare:
-   before_script:
-    - |
-      echo "Account = $AWS_ACCOUNT_NAME | Account ID = $TARGET_AWS_ACCOUNT"
+aws s3api put-bucket-policy `
+    --bucket $S3_BUCKET_NAME `
+    --policy file://bucket-policy.json
 
-auth:
-  stage: authenticate
-  extends: [.vault-aws-auth]
-  variables:
-    LSEG_PPE_VAULT: "true"  
-    AWS_ACCOUNT: "$TARGET_AWS_ACCOUNT"    
-  tags: ["LSEG"]
-  rules:
-    - if: $ENVIRONMENT_NAME != "---" &&  $ENVIRONMENT_NAME =~ /^(dev2|nfr|uat|prod)$/
+Write-Host "Step 4: Create IAM role for RDS access to S3"
+$rdsS3Role = @"
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "rds.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
+"@
+$rdsS3Role | Out-File -FilePath "rds-s3-role.json" -Encoding UTF8
 
-cleanup_parameters:
-  needs:
-    - auth
-  tags: ["$RUNNER_TAG"]
-  stage: cleanup-params
-  image: registry.dx1.lseg.com/app/app-50339/iac-temp/psl-base-docker-image/psl/awscli-docker:latest
-  script:
-    - |
-      echo "Starting cleanup of existing parameters under $PARAMETER_PATH..."
-      
-      # Get all parameters under the path
-      PARAMETERS=$(aws ssm get-parameters-by-path \
-        --path "$PARAMETER_PATH" \
-        --recursive \
-        --region "$AWS_REGION" \
-        --query "Parameters[*].Name" \
-        --output text)
-      
-      if [ -n "$PARAMETERS" ]; then
-        echo "Found existing parameters. Proceeding with deletion..."
-        
-        # Delete each parameter
-        for PARAM in $PARAMETERS; do
-          echo "Deleting parameter: $PARAM"
-          if aws ssm delete-parameter \
-            --name "$PARAM" \
-            --region "$AWS_REGION"; then
-            echo "✅ Successfully deleted parameter: $PARAM"
-          else
-            echo "❌ Failed to delete parameter: $PARAM"
-            exit 1
-          fi
-        done
-        
-        echo "✅ All existing parameters have been cleaned up successfully!"
-      else
-        echo "No existing parameters found under $PARAMETER_PATH"
-      fi
+aws iam create-role `
+    --role-name RDStoS3Role `
+    --assume-role-policy-document file://rds-s3-role.json
 
-store_log_config:
-  needs:
-    - cleanup_parameters
-  tags: ["$RUNNER_TAG"]
-  stage: store-log-config
-  image: registry.dx1.lseg.com/app/app-50339/iac-temp/psl-base-docker-image/psl/awscli-docker:latest
-  variables:
-    PACKAGE_NAME:
-      value: "root"
-    LOG_LEVEL:
-      value: "WARN"
-    EXPIRY_TIME:
-      value: "3600000"
-  script:
-    - |
-      echo "Starting log configuration storage process..."
-      
-      # Validate input parameters
-      if [[ -z "$PACKAGE_NAME" || -z "$LOG_LEVEL" || -z "$EXPIRY_TIME" ]]; then
-        echo "❌ ERROR: Required variables are missing! Please provide PACKAGE_NAME, LOG_LEVEL, and EXPIRY_TIME."
-        exit 1
-      fi
-      
-      # Calculate timestamps
-      CURRENT_TIME=$(TZ=GMT date +%s)
-      EXPIRY_TIMESTAMP=$(($CURRENT_TIME + ($EXPIRY_TIME)))
-      
-      # Create JSON payload
-      PARAMETER_VALUE="{\"packageName\":\"$PACKAGE_NAME\",\"logLevel\":\"$LOG_LEVEL\",\"version\":\"1\",\"expiryTimestamp\":\"$EXPIRY_TIMESTAMP\"}"
-      
-      echo "Creating new parameter: $PARAMETER_PATH/$PACKAGE_NAME"
-      echo "Parameter value: $PARAMETER_VALUE"
-      
-      # Create new parameter
-      if aws ssm put-parameter \
-          --name "$PARAMETER_PATH/$PACKAGE_NAME" \
-          --value "$PARAMETER_VALUE" \
-          --type "SecureString" \
-          --region "$AWS_REGION"; then
-        echo "✅ Log configuration successfully stored in Parameter Store!"
-        
-        # Verify the parameter creation
-        echo "Verifying parameter creation..."
-        STORED_PARAM=$(aws ssm get-parameter \
-          --name "$PARAMETER_PATH/$PACKAGE_NAME" \
-          --with-decryption \
-          --region "$AWS_REGION" \
-          --query "Parameter.Value" \
-          --output text)
-        
-        if [[ "$STORED_PARAM" == "$PARAMETER_VALUE" ]]; then
-          echo "✅ Parameter verification successful!"
-        else
-          echo "❌ WARNING: Parameter verification failed. Stored value might be different from intended value."
-          exit 1
-        fi
-      else
-        echo "❌ ERROR: Failed to store parameter in AWS Parameter Store"
-        exit 1
-      fi
+Write-Host "Step 5: Attach policy to allow RDS to access S3"
+$rdsS3Policy = @"
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::${S3_BUCKET_NAME}",
+                "arn:aws:s3:::${S3_BUCKET_NAME}/*"
+            ]
+        }
+    ]
+}
+"@
+$rdsS3Policy | Out-File -FilePath "rds-s3-policy.json" -Encoding UTF8
 
-notify-app:
-  stage: notify-app
-  script:
-    - |
-      echo "Triggering webhook to refresh log level..."
-      MAX_RETRIES=3
-      RETRY_COUNT=0
-      SUCCESS=false
-      
-      while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$SUCCESS" = false ]; do
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-          --connect-timeout 10 \
-          --max-time 30 \
-          -X POST "$WEBHOOK_URL" || echo "000")
-        
-        if [ "$RESPONSE" = "200" ]; then
-          echo "✅ Webhook successfully triggered!"
-          SUCCESS=true
-        elif [ "$RESPONSE" = "000" ]; then
-          echo "Curl command failed, attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
-          RETRY_COUNT=$((RETRY_COUNT + 1))
-          [ $RETRY_COUNT -lt $MAX_RETRIES ] && sleep 5
-        else
-          echo "❌ Webhook failed with response code $RESPONSE"
-          exit 1
-        fi
-      done
-      
-      if [ "$SUCCESS" = false ]; then
-        echo "❌ Failed to trigger webhook after $MAX_RETRIES attempts"
-        exit 1
-      fi
-  only:
-    - feature/FRPS-19759
+aws iam put-role-policy `
+    --role-name RDStoS3Role `
+    --policy-name RDStoS3Policy `
+    --policy-document file://rds-s3-policy.json
+
+Write-Host "Step 6: Export Aurora snapshot to S3"
+aws rds start-export-task `
+    --export-task-identifier $BACKUP_NAME `
+    --source-arn "arn:aws:rds:${AWS_REGION}:${SOURCE_ACCOUNT}:cluster-snapshot:${SOURCE_DB_CLUSTER}-snapshot" `
+    --s3-bucket-name $S3_BUCKET_NAME `
+    --iam-role-arn "arn:aws:iam::${SOURCE_ACCOUNT}:role/RDStoS3Role" `
+    --kms-key-id "arn:aws:kms:${AWS_REGION}:${SOURCE_ACCOUNT}:key/your-kms-key-id"
+
+Write-Host "Step 7: Monitor export task status"
+aws rds describe-export-tasks `
+    --export-task-identifier $BACKUP_NAME
+
+Write-Host "Step 8: Create IAM role in target account for import"
+$targetRdsRole = @"
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "rds.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
+"@
+$targetRdsRole | Out-File -FilePath "target-rds-role.json" -Encoding UTF8
+
+aws iam create-role `
+    --role-name S3toRDSRole `
+    --assume-role-policy-document file://target-rds-role.json
+
+Write-Host "Step 9: Import backup from S3 to new Aurora cluster"
+aws rds restore-db-cluster-from-s3 `
+    --db-cluster-identifier new-aurora-cluster `
+    --engine aurora-mysql `
+    --master-username admin `
+    --master-user-password your-password `
+    --s3-bucket-name $S3_BUCKET_NAME `
+    --s3-prefix $BACKUP_NAME `
+    --source-engine aurora-mysql `
+    --source-engine-version 5.7.12 `
+    --vpc-security-group-ids sg-xxxxxxxx `
+    --db-subnet-group-name your-subnet-group `
+    --iam-role-arn "arn:aws:iam::${TARGET_ACCOUNT}:role/S3toRDSRole"
+
+Write-Host "Step 10: Create DB instance in the restored cluster"
+aws rds create-db-instance `
+    --db-instance-identifier new-aurora-instance `
+    --db-cluster-identifier new-aurora-cluster `
+    --engine aurora-mysql `
+    --db-instance-class db.r5.large
