@@ -10,3 +10,160 @@
         <version>2.15.2</version>
     </dependency>
 </dependencies>
+
+
+
+variables:
+  AWS_REGION: "eu-west-1"  # Change to your AWS region
+  PARAMETER_PATH: "/log-config"
+  ENVIRONMENT_NAME:
+    value: "---"
+    options:
+      - "dev2"
+      - "nfr"
+      - "uat"
+      - "Prod"
+      - "---"
+    description: "select the target environment"
+  PACKAGE_NAME:
+    value: ""  # Default is empty; user must enter a value
+    description: "Enter the Package name."
+  LOG_LEVEL:
+    value: ""
+    description: "Enter Logging level for package name"  # Default value
+  EXPIRY_TIME:
+    value: ""
+    description: "Enter the expiry time to reset the logging level(seconds)"  # Default value
+
+  WEBHOOK_URL: "http://100.99.124.149:8086/refresh-log-level"
+
+workflow:
+   rules:
+     - if: $ENVIRONMENT_NAME =~ /^nfr.*/
+       variables:
+         RUNNER_TAG: "psl-epam-runner-qa"
+         TARGET_AWS_ACCOUNT: "332028679471"
+         AWS_ACCOUNT_NAME: "qa"
+     - if: $ENVIRONMENT_NAME =~ /^uat.*/
+       variables:
+         RUNNER_TAG: "psl-epam-runner-uat"
+         TARGET_AWS_ACCOUNT: "851725348656"
+         AWS_ACCOUNT_NAME: "uat"
+     - if: $ENVIRONMENT_NAME =~ /^prod.*/
+       variables:
+         RUNNER_TAG: "psl-epam-runner-prod"
+         TARGET_AWS_ACCOUNT: "730335637172"
+         AWS_ACCOUNT_NAME: "prod"
+     - if: $ENVIRONMENT_NAME =~ /^dev2.*/
+       variables:
+         RUNNER_TAG: "psl-epam-runner"
+         TARGET_AWS_ACCOUNT: "729500479720"
+         AWS_ACCOUNT_NAME: "dev"
+     - when: always
+
+include:  
+  - project: 'ci/stable/security/vault/vault-integrator'
+    ref: '4.1.0' # https://gitlab.dx1.lseg.com/ci/stable/security/vault/vault-integrator/-/tree/master/
+    file:
+      - 'templates/vault-integrator.yml'
+
+stages:
+  - authenticate
+  - store-log-config
+  - notify-app
+.prepare:
+   before_script:
+    - |
+      echo "Account = $AWS_ACCOUNT_NAME | Account ID = $TARGET_AWS_ACCOUNT"
+
+auth:
+  stage: authenticate
+  extends: [.vault-aws-auth]
+  variables:
+    LSEG_PPE_VAULT: "true"  
+    AWS_ACCOUNT: "$TARGET_AWS_ACCOUNT"    
+  tags: ["LSEG"]
+  rules:
+    - if: $ENVIRONMENT_NAME != "---" &&  $ENVIRONMENT_NAME =~ /^(dev2|nfr|uat|prod)$/
+
+
+
+store_log_config:
+  needs:
+    - auth
+  tags: ["$RUNNER_TAG"]
+
+  stage: store-log-config
+  image: registry.dx1.lseg.com/app/app-50339/iac-temp/psl-base-docker-image/psl/awscli-docker:latest  # Using AWS CLI Docker image
+  variables:
+    PACKAGE_NAME:
+      value: "root"  # Default is empty; user must enter a value
+    LOG_LEVEL:
+      value: "WARN"  # Default value
+    EXPIRY_TIME:
+      value: "3600000"  # Default value (1 hour)
+  script:
+    - CURRENT_TIME=$(TZ=GMT date +%s)
+    - EXPIRY_TIMESTAMP=$(($CURRENT_TIME + ($EXPIRY_TIME)))  # Convert milliseconds to seconds
+    - echo "Storing log level configuration in AWS Parameter Store..."
+    
+    # Check if required variables are set
+    - |
+      if [[ -z "$PACKAGE_NAME" || -z "$LOG_LEVEL" || -z "$EXPIRY_TIME" ]]; then
+        echo "❌ ERROR: One or more required variables are missing! Please provide PACKAGE_NAME, LOG_LEVEL, and EXPIRY_TIME."
+        exit 1
+      fi
+    
+    # Construct the JSON payload
+    - PARAMETER_VALUE="{\"package\":\"$PACKAGE_NAME\",\"log_level\":\"$LOG_LEVEL\",\"expiry_time\":\"$EXPIRY_TIME\", \"expiry_timestamp\":\"$EXPIRY_TIMESTAMP\"}"
+    
+    # Store in AWS Systems Manager Parameter Store
+    - |
+      aws ssm put-parameter \
+        --name "$PARAMETER_PATH/$PACKAGE_NAME" \
+        --value "$PARAMETER_VALUE" \
+        --type "SecureString" \
+        --overwrite \
+        --region "$AWS_REGION"
+
+    
+    - echo "✅ Log level configuration stored successfully!"
+
+
+notify-app:
+  stage: notify-app
+  script:
+    - echo "Triggering webhook to refresh log level..."
+    - |
+      # Add timeout and retry logic
+      MAX_RETRIES=3
+      RETRY_COUNT=0
+      SUCCESS=false
+      
+      while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$SUCCESS" = false ]; do
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+          --connect-timeout 10 \
+          --max-time 30 \
+          -X POST "$WEBHOOK_URL" || echo "000")
+        
+        if [ "$RESPONSE" = "200" ]; then
+          echo "Webhook successfully triggered!"
+          SUCCESS=true
+        elif [ "$RESPONSE" = "000" ]; then
+          echo "Curl command failed, attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
+          RETRY_COUNT=$((RETRY_COUNT + 1))
+          [ $RETRY_COUNT -lt $MAX_RETRIES ] && sleep 5
+        else
+          echo "Webhook failed with response code $RESPONSE"
+          exit 1
+        fi
+      done
+      
+      if [ "$SUCCESS" = false ]; then
+        echo "Failed to trigger webhook after $MAX_RETRIES attempts"
+        exit 1
+      fi
+    
+  only:
+    - feature/FRPS-19759
+
