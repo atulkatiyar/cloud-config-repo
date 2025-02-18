@@ -1,53 +1,72 @@
-# .gitlab-ci.yml
-variables:
-  AWS_DEFAULT_REGION: "us-east-1"
-  SOURCE_DB_CLUSTER: "your-source-cluster-identifier"
-  S3_BUCKET_NAME: "your-backup-bucket"
-  SOURCE_ACCOUNT: "your-source-account-id"
-  TARGET_ACCOUNT: "your-target-account-id"
+#!/bin/bash
 
-stages:
-  - backup
-  - restore
+# Check if operation type is provided
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 [backup|restore]"
+    exit 1
+fi
 
-# Job for source account operations
-backup-to-s3:
-  stage: backup
-  image: 
-    name: amazon/aws-cli:latest
-    entrypoint: [""]
-  before_script:
-    - aws configure set aws_access_key_id ${SOURCE_AWS_ACCESS_KEY_ID}
-    - aws configure set aws_secret_access_key ${SOURCE_AWS_SECRET_ACCESS_KEY}
-    - aws configure set region ${AWS_DEFAULT_REGION}
-    - chmod +x ./rds-backup-restore.sh
-  script:
-    - |
-      # Execute steps 1-7 from the script
-      ./rds-backup-restore.sh backup
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  tags:
-    - aws
+OPERATION=$1
 
-# Job for target account operations
-restore-from-s3:
-  stage: restore
-  image: 
-    name: amazon/aws-cli:latest
-    entrypoint: [""]
-  before_script:
-    - aws configure set aws_access_key_id ${TARGET_AWS_ACCESS_KEY_ID}
-    - aws configure set aws_secret_access_key ${TARGET_AWS_SECRET_ACCESS_KEY}
-    - aws configure set region ${AWS_DEFAULT_REGION}
-    - chmod +x ./rds-backup-restore.sh
-  script:
-    - |
-      # Execute steps 8-10 from the script
-      ./rds-backup-restore.sh restore
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  tags:
-    - aws
-  needs:
-    - backup-to-s3
+# Variables will be set from GitLab CI/CD variables
+SOURCE_DB_CLUSTER=${SOURCE_DB_CLUSTER}
+S3_BUCKET_NAME=${S3_BUCKET_NAME}
+SOURCE_ACCOUNT=${SOURCE_ACCOUNT}
+TARGET_ACCOUNT=${TARGET_ACCOUNT}
+BACKUP_NAME="aurora-backup-$(date +%Y-%m-%d)"
+AWS_REGION=${AWS_DEFAULT_REGION}
+
+if [ "$OPERATION" = "backup" ]; then
+    echo "Executing backup operations..."
+    
+    echo "Step 1: Create S3 bucket in source account"
+    aws s3api create-bucket \
+        --bucket $S3_BUCKET_NAME \
+        --region $AWS_REGION
+
+    echo "Step 2: Enable versioning on S3 bucket"
+    aws s3api put-bucket-versioning \
+        --bucket $S3_BUCKET_NAME \
+        --versioning-configuration Status=Enabled
+
+    # ... [Previous bucket policy and role creation steps] ...
+
+    echo "Step 6: Export Aurora snapshot to S3"
+    aws rds start-export-task \
+        --export-task-identifier $BACKUP_NAME \
+        --source-arn "arn:aws:rds:${AWS_REGION}:${SOURCE_ACCOUNT}:cluster-snapshot:${SOURCE_DB_CLUSTER}-snapshot" \
+        --s3-bucket-name $S3_BUCKET_NAME \
+        --iam-role-arn "arn:aws:iam::${SOURCE_ACCOUNT}:role/RDStoS3Role" \
+        --kms-key-id "arn:aws:kms:${AWS_REGION}:${SOURCE_ACCOUNT}:key/your-kms-key-id"
+
+    echo "Step 7: Monitor export task status"
+    aws rds describe-export-tasks \
+        --export-task-identifier $BACKUP_NAME
+
+elif [ "$OPERATION" = "restore" ]; then
+    echo "Executing restore operations..."
+    
+    echo "Step 8: Create IAM role in target account for import"
+    # ... [Previous restore steps] ...
+
+    echo "Step 9: Import backup from S3 to new Aurora cluster"
+    aws rds restore-db-cluster-from-s3 \
+        --db-cluster-identifier new-aurora-cluster \
+        --engine aurora-mysql \
+        --master-username admin \
+        --master-user-password ${DB_PASSWORD} \
+        --s3-bucket-name $S3_BUCKET_NAME \
+        --s3-prefix $BACKUP_NAME \
+        --source-engine aurora-mysql \
+        --source-engine-version 5.7.12 \
+        --vpc-security-group-ids ${SECURITY_GROUP_ID} \
+        --db-subnet-group-name ${SUBNET_GROUP} \
+        --iam-role-arn "arn:aws:iam::${TARGET_ACCOUNT}:role/S3toRDSRole"
+
+    echo "Step 10: Create DB instance in the restored cluster"
+    aws rds create-db-instance \
+        --db-instance-identifier new-aurora-instance \
+        --db-cluster-identifier new-aurora-cluster \
+        --engine aurora-mysql \
+        --db-instance-class db.r5.large
+fi
