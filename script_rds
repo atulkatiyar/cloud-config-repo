@@ -1,194 +1,43 @@
-variables:
-  AWS_DEFAULT_REGION: "us-east-1"
-  SOURCE_DB_CLUSTER: "your-source-cluster-identifier"
-  S3_BUCKET_NAME: "your-backup-bucket"
-  SOURCE_ACCOUNT: "your-source-account-id"
-  TARGET_ACCOUNT: "your-target-account-id"
-
 stages:
   - backup
+  - share
+  - copy
   - restore
 
-backup-to-s3:
+backup_aurora:
   stage: backup
-  image: 
-    name: amazon/aws-cli:latest
-    entrypoint: [""]
-  before_script:
-    - aws configure set aws_access_key_id ${SOURCE_AWS_ACCESS_KEY_ID}
-    - aws configure set aws_secret_access_key ${SOURCE_AWS_SECRET_ACCESS_KEY}
-    - aws configure set region ${AWS_DEFAULT_REGION}
   script:
-    - chmod +x scripts/rds-backup.sh
-    - ./scripts/rds-backup.sh
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  tags:
-    - aws
+    - export SNAPSHOT_ID="aurora-cluster-snapshot-$(date +%Y%m%d%H%M%S)"
+    - aws configure set aws_access_key_id $AWS_SOURCE_ACCESS_KEY
+    - aws configure set aws_secret_access_key $AWS_SOURCE_SECRET_KEY
+    - aws rds create-db-cluster-snapshot --db-cluster-snapshot-identifier $SNAPSHOT_ID --db-cluster-identifier my-aurora-cluster
+  only:
+    - main
 
-restore-from-s3:
+share_snapshot:
+  stage: share
+  script:
+    - export SNAPSHOT_ID="aurora-cluster-snapshot-$(date +%Y%m%d%H%M%S)"
+    - aws rds modify-db-cluster-snapshot-attribute --db-cluster-snapshot-identifier $SNAPSHOT_ID --attribute-name restore --values-to-add $TARGET_AWS_ACCOUNT_ID
+  only:
+    - main
+
+copy_snapshot:
+  stage: copy
+  script:
+    - export SNAPSHOT_ID="aurora-cluster-snapshot-$(date +%Y%m%d%H%M%S)"
+    - export TARGET_SNAPSHOT_ID="copied-aurora-cluster-snapshot"
+    - aws configure set aws_access_key_id $AWS_TARGET_ACCESS_KEY
+    - aws configure set aws_secret_access_key $AWS_TARGET_SECRET_KEY
+    - aws rds copy-db-cluster-snapshot --source-db-cluster-snapshot-identifier arn:aws:rds:$AWS_REGION:$SOURCE_AWS_ACCOUNT_ID:cluster-snapshot:$SNAPSHOT_ID --target-db-cluster-snapshot-identifier $TARGET_SNAPSHOT_ID --kms-key-id arn:aws:kms:$AWS_REGION:$TARGET_AWS_ACCOUNT_ID:key/$TARGET_KMS_KEY_ID
+  only:
+    - main
+
+restore_aurora:
   stage: restore
-  image: 
-    name: amazon/aws-cli:latest
-    entrypoint: [""]
-  before_script:
-    - aws configure set aws_access_key_id ${TARGET_AWS_ACCESS_KEY_ID}
-    - aws configure set aws_secret_access_key ${TARGET_AWS_SECRET_ACCESS_KEY}
-    - aws configure set region ${AWS_DEFAULT_REGION}
   script:
-    - chmod +x scripts/rds-restore.sh
-    - ./scripts/rds-restore.sh
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  tags:
-    - aws
-  needs:
-    - backup-to-s3
-
-
-
-
-
-#!/bin/bash
-# scripts/rds-backup.sh
-
-# Variables will be set from GitLab CI/CD variables
-SOURCE_DB_CLUSTER=${SOURCE_DB_CLUSTER}
-S3_BUCKET_NAME=${S3_BUCKET_NAME}
-SOURCE_ACCOUNT=${SOURCE_ACCOUNT}
-TARGET_ACCOUNT=${TARGET_ACCOUNT}
-BACKUP_NAME="aurora-backup-$(date +%Y-%m-%d)"
-AWS_REGION=${AWS_DEFAULT_REGION}
-
-echo "Step 1: Create S3 bucket in source account"
-aws s3api create-bucket \
-    --bucket $S3_BUCKET_NAME \
-    --region $AWS_REGION
-
-echo "Step 2: Enable versioning on S3 bucket"
-aws s3api put-bucket-versioning \
-    --bucket $S3_BUCKET_NAME \
-    --versioning-configuration Status=Enabled
-
-echo "Step 3: Create bucket policy for cross-account access"
-aws s3api put-bucket-policy \
-    --bucket $S3_BUCKET_NAME \
-    --policy '{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "CrossAccountAccess",
-                "Effect": "Allow",
-                "Principal": {
-                    "AWS": "arn:aws:iam::${TARGET_ACCOUNT}:root"
-                },
-                "Action": [
-                    "s3:GetObject",
-                    "s3:ListBucket"
-                ],
-                "Resource": [
-                    "arn:aws:s3:::${S3_BUCKET_NAME}",
-                    "arn:aws:s3:::${S3_BUCKET_NAME}/*"
-                ]
-            }
-        ]
-    }'
-
-echo "Step 4: Create IAM role for RDS access to S3"
-aws iam create-role \
-    --role-name RDStoS3Role \
-    --assume-role-policy-document '{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "rds.amazonaws.com"
-                },
-                "Action": "sts:AssumeRole"
-            }
-        ]
-    }'
-
-echo "Step 5: Attach policy to allow RDS to access S3"
-aws iam put-role-policy \
-    --role-name RDStoS3Role \
-    --policy-name RDStoS3Policy \
-    --policy-document '{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "s3:PutObject",
-                    "s3:GetObject",
-                    "s3:ListBucket"
-                ],
-                "Resource": [
-                    "arn:aws:s3:::${S3_BUCKET_NAME}",
-                    "arn:aws:s3:::${S3_BUCKET_NAME}/*"
-                ]
-            }
-        ]
-    }'
-
-echo "Step 6: Export Aurora snapshot to S3"
-aws rds start-export-task \
-    --export-task-identifier $BACKUP_NAME \
-    --source-arn "arn:aws:rds:${AWS_REGION}:${SOURCE_ACCOUNT}:cluster-snapshot:${SOURCE_DB_CLUSTER}-snapshot" \
-    --s3-bucket-name $S3_BUCKET_NAME \
-    --iam-role-arn "arn:aws:iam::${SOURCE_ACCOUNT}:role/RDStoS3Role" \
-    --kms-key-id "arn:aws:kms:${AWS_REGION}:${SOURCE_ACCOUNT}:key/your-kms-key-id"
-
-echo "Step 7: Monitor export task status"
-aws rds describe-export-tasks \
-    --export-task-identifier $BACKUP_NAME
-
-
-
-
-
-
-
-
-
-
-#!/bin/bash
-# scripts/rds-restore.sh
-
-echo "Step 8: Create IAM role in target account for import"
-aws iam create-role \
-    --role-name S3toRDSRole \
-    --assume-role-policy-document '{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "rds.amazonaws.com"
-                },
-                "Action": "sts:AssumeRole"
-            }
-        ]
-    }'
-
-echo "Step 9: Import backup from S3 to new Aurora cluster"
-aws rds restore-db-cluster-from-s3 \
-    --db-cluster-identifier new-aurora-cluster \
-    --engine aurora-mysql \
-    --master-username admin \
-    --master-user-password ${DB_PASSWORD} \
-    --s3-bucket-name ${S3_BUCKET_NAME} \
-    --s3-prefix ${BACKUP_NAME} \
-    --source-engine aurora-mysql \
-    --source-engine-version 5.7.12 \
-    --vpc-security-group-ids ${SECURITY_GROUP_ID} \
-    --db-subnet-group-name ${SUBNET_GROUP} \
-    --iam-role-arn "arn:aws:iam::${TARGET_ACCOUNT}:role/S3toRDSRole"
-
-echo "Step 10: Create DB instance in the restored cluster"
-aws rds create-db-instance \
-    --db-instance-identifier new-aurora-instance \
-    --db-cluster-identifier new-aurora-cluster \
-    --engine aurora-mysql \
-    --db-instance-class db.r5.large
+    - aws configure set aws_access_key_id $AWS_TARGET_ACCESS_KEY
+    - aws configure set aws_secret_access_key $AWS_TARGET_SECRET_KEY
+    - aws rds restore-db-cluster-from-snapshot --db-cluster-identifier restored-aurora-cluster --snapshot-identifier copied-aurora-cluster-snapshot --engine aurora-mysql
+  only:
+    - main
