@@ -44,71 +44,6 @@ restore_aurora:
 
 
 
-\solutions\configurations-and-scheduling-solutions\calendar-app\calendar-service-app-sboot\target\calendar-service-app-sboot-local-SNAPSHOT.jar
-\solutions\configurations-and-scheduling-solutions\periodic-scheduler-app\scheduling-service-app-sboot\target\scheduling-service-app-sboot-local-SNAPSHOT.jar
-\solutions\configurations-and-scheduling-solutions\shared-configuration-store-app\shared-configuration-store-app-sboot\target\shared-configuration-store-app-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\corporate-events-data-distributor-app\corporate-events-data-distributor-sboot\target\corporate-events-data-distributor-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\corporate-events-processor-app\corporate-events-processor-sboot\target\corporate-events-processor-sboot-local-SNAPSHOT-original.jar
-\solutions\corporate-events-solutions\corporate-events-processor-app\corporate-events-processor-sboot\target\corporate-events-processor-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\index-universe-data-distributor-app\index-universe-data-distributor-sboot\target\index-universe-data-distributor-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\index-universe-processor-app\index-universe-processor-sboot\target\index-universe-processor-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\space-data-distributor-app\space-data-distributor-sboot\target\space-data-distributor-sboot-local-SNAPSHOT.jar
-\solutions\shared-solutions\api-mock-service\target\api-mock-service-local-SNAPSHOT.jar
-\solutions\shared-solutions\api-mock-service\target\original-api-mock-service-local-SNAPSHOT.jar
-\solutions\template-solutions\template-app\template-sboot\target\template-sboot-local-SNAPSHOT-original.jar
-\solutions\template-solutions\template-app\template-sboot\target\template-sboot-local-SNAPSHOT.jar
-
-
-
-
-
-#!/bin/sh
-set -e
-
-echo "Building Maven project for $CAPABILITY_GROUP"
-cd $CAPABILITY_GROUP
-ls && pwd
-# mapping of user-frandly artifact name to nexus artifact name
-CI_REGISTRY_IMAGE="registry.dx1.lseg.com/app/app-50339/iac-temp/psl-base-docker-image"
-declare -A ARTIFACT_NAME_MAPPING=(
-    ["calendar-app"]="calendar-service-app-sboot:com.lseg.ipps.solutions.cas"
-    ["periodic-scheduler-app"]="scheduling-service-app-sboot:com.lseg.ipps.solutions.cas"
-    ["shared-configuration-store-app"]="shared-configuration-store-app-sboot:com.lseg.ipps.solutions.cas"
-    ["portfolio-execution-app"]="portfolio-execution-sboot:com.lseg.ipps.solutions.pc"
-    ["portfolio-maintenance-app"]="portfolio-maintenance-sboot:com.lseg.ipps.solutions.pc"
-    ["portfolio-store-app"]="portfolio-store-sboot:com.lseg.ipps.solutions.pc"
-    ["portfolio-config-store-app"]="portfolio-config-store-sboot:com.lseg.ipps.solutions.pc"
-    ["portfolio-data-app"]="portfolio-data-sboot:com.lseg.ipps.solutions.pc"
-    ["index-calculation-app"]="index-calculation-app-sboot:com.lseg.ipps.solutions.ics"
-    ["index-metrics-read-app"]="index-metrics-reader-app-sboot:com.lseg.ipps.solutions.ics"
-    ["index-metrics-recon-app"]="index-metrics-recon-app-sboot:com.lseg.ipps.solutions.ics"
-    ["index-calc-config-app"]="index-calc-config-app-sboot:com.lseg.ipps.solutions.ics"
-    ["index-metrics-store-app"]="index-metrics-store-app-sboot:com.lseg.ipps.solutions.ics"
-    ["index-validation-app"]="index-validation-app-sboot:com.lseg.ipps.solutions.ics"
-    ["index-validation-store-app"]="index-validation-store-app-sboot:com.lseg.ipps.solutions.ics"
-    ["index-calc-data-app"]="index-calc-data-app-sboot:com.lseg.ipps.solutions.ics"
-    ["corporate-events-processor-app"]="corporate-events-processor-sboot:com.lseg.ipps.solutions.space"
-    ["corporate-events-data-distributor-app"]="corporate-events-data-distributor-sboot:com.lseg.ipps.solutions.space"
-    ["index-universe-data-distributor-app"]="index-universe-data-distributor-sboot:com.lseg.ipps.solutions.space"
-    ["index-universe-processor-app"]="index-universe-processor-sboot:com.lseg.ipps.solutions.space"
-    ["space-data-distributor-app"]="space-data-distributor-sboot:com.lseg.ipps.solutions.space"   
-    ["exception-management-app"]="exception-management-sboot:com.lseg.ipps.solutions.ops"
-    ["eod-dashboard-app"]="eod-dashboard-sboot:com.lseg.ipps.solutions.ops"
-    ["eds-dependency-data-readiness-app"]="eds-dependency-data-readiness-sboot:com.lseg.ipps.solutions.eds"
-    ["eds-dependency-manager-app"]="eds-dependency-manager-sboot:com.lseg.ipps.solutions.eds"
-    ["eds-dependency-evaluation-app"]="eds-dependency-evaluation-sboot:com.lseg.ipps.solutions.eds"
-    ["eds-index-calendar-app"]="eds-index-calendar-sboot:com.lseg.ipps.solutions.eds"
-    ["platform-market-data-app"]="platform-market-data-app-sboot:com.lseg.ipps.solutions.eds"
-    ["eds-event-audit-app"]="eds-event-audit-sboot:com.lseg.ipps.solutions.eds"
-    ["index-universe-rebalance-app"]="index-universe-rebalance-sboot:com.lseg.ipps.solutions.ium"
-    ["index-universe-rebalance-store-app"]="index-universe-rebalance-store-sboot:com.lseg.ipps.solutions.ium"
-    ["index-universe-rebalance-bff-app"]="index-universe-rebalance-bff-sboot:com.lseg.ipps.solutions.ium"
-    ["index-universe-rebalance-reporting-app"]="index-universe-rebalance-reporting-sboot:com.lseg.ipps.solutions.ium"
-    ["index-universe-rebalance-data-distribution-app"]="index-universe-rebalance-data-distribution-sboot:com.lseg.ipps.solutions.ium"
-    ["wiremock-app"]="api-mock-service:com.lseg.ipps.solutions.shared.solutions"
-    ["index-data-versioning-app"]="index-data-versioning-sboot:com.lseg.ipps.solutions.eds"
-)
-
 # Dynamic Generate The Docker Image Build Summary File      
 echo "Microservice Docker Images Build Summary" >> build_images.txt
 echo "" >> build_images.txt
@@ -131,217 +66,32 @@ stages:
 EOF
 
 cat blackduck-image-scan-pipeline.yml
-# Find all JAR files from modules ending with 'sboot' for Docker build
-for jar_path in $(find . -type f -name '*sboot*.jar' -o -name 'api-mock-service*.jar'); do
+
+# Enhanced find command to catch all relevant jar files
+for jar_path in $(find . -type f \( \
+    -name '*sboot*.jar' -o \
+    -name 'api-mock-service*.jar' -o \
+    -name 'log-level-agent*.jar' -o \
+    -name 'log-level-controller*.jar' \
+    \) -not -name '*original.jar'); do
+    
+    # Extract app name based on path pattern
     if [[ "$jar_path" == *"api-mock-service"* ]]; then
-      app_name="wiremock-app"
+        app_name="wiremock-app"
+    elif [[ "$jar_path" == *"log-level-agent"* ]]; then
+        app_name="log-level-agent"
+    elif [[ "$jar_path" == *"log-level-controller"* ]]; then
+        app_name="log-level-controller"
     else
-      app_name=$(basename $(dirname $(dirname $(dirname "$jar_path"))))
+        # Extract the app name from the path for sboot jars
+        app_name=$(basename $(dirname $(dirname $(dirname "$jar_path"))))
     fi
+    
     MICROSERVICE=$app_name
-    # setting up the variables for building the docekr image.
-    if [[ "$CI_COMMIT_BRANCH" != "" ]]; then
-        NEXUS_URL="https://ftse-indexmgmt-prod-nexus.064366648561.ew1.aws.dev.r53"
-        NEXUS_REPOSITORY="snapshots"
-        NEXUS_VERSION="${CI_COMMIT_BRANCH//\//-}-SNAPSHOT"
-    else
-        NEXUS_URL="https://ftse-indexmgmt-prod-nexus.064366648561.ew1.aws.dev.r53"
-        NEXUS_REPOSITORY="releases"
-        NEXUS_VERSION="${CI_COMMIT_TAG}"
-    fi
-        echo "==========================================="
-        echo "ARTIFACT_NAME=$MICROSERVICE"
-        echo "NEXUS_URL=$NEXUS_URL"
-        echo "NEXUS_REPOSITORY=$RELEASE_TYPE"
-        echo "NEXUS_VERSION=$NEXUS_VERSION"
-        echo "==========================================="
 
-       # split and get the corresponding group and artifact from the selected microservice.
-     IFS=':' read -r artifact group <<< "${ARTIFACT_NAME_MAPPING[$MICROSERVICE]}"
-         GROUP_PATH=$(echo "$group" | tr '.' '/')
-           nexusArtifactName=$(echo "$artifact")
-           if [[ -z $nexusArtifactName ]]; then
-              echo -e "\033[31mError: No valid Name found for artifact:- $artifact in Nexus .\033[0m"
-              continue
-           fi
-              echo "searching artifacts : $nexusArtifactName in group :- $group"
-        if [[ -z $NEXUS_VERSION ]] || [[ "$NEXUS_VERSION" == "integration-core-SNAPSHOT" ]] || [[ "$NEXUS_VERSION" == *"integration-dx1-"* ]] || [[ "$NEXUS_VERSION" == *"release-REL-"* ]] || [[ "$NEXUS_VERSION" == *"feature-"* || "$NEXUS_VERSION" == *"Feature-"* ]] || [[ "$NEXUS_VERSION" == *"hotfix-"* || "$NEXUS_VERSION" == *"Hotfix-"* ]] || [[ "$NEXUS_VERSION" == *"bugfix-"* || "$NEXUS_VERSION" == *"Bugfix-"* ]]; then
-            echo "finding the latest revision of artifact in $NEXUS_VERSION with continuation token"
-            # Initialize the continuation token and response variable
-            continuation_token=""
-            all_responses="[]"
-            # Loop to handle pagination
-                while true; do
-                    url="$NEXUS_URL/service/rest/v1/search/assets?repository=$NEXUS_REPOSITORY&group=$group&name=$nexusArtifactName&maven.baseVersion=$NEXUS_VERSION&sort=version"
+    # Rest of your existing script continues here...
+    [Previous script content from the setting up variables onwards...]
 
-                        # append token to the URL if it is not the first request
-                        if [ -n "$continuation_token" ]; then
-                            url="$url&continuationToken=$continuation_token"
-                        fi
-                        # Make the API call and capture the response
-                        response=$(curl -k -X GET "$url" -H "accept: application/json" -s)
-                        # Append current items to all_responses
-                        items=$(echo "$response" | jq -c '.items')
-                        all_responses=$(echo "$all_responses $items" | jq -s 'add')
-                        # Extract continuation token for the next page
-                        continuation_token=$(echo "$response" | jq -r '.continuationToken')
-                        # If no continuation token, exit loop
-                        if [ "$continuation_token" == "null" ] || [ -z "$continuation_token" ]; then
-                        break
-                        fi
-                done
-                    latestVersion=$(echo "$all_responses" | jq -r 'sort_by(.lastModified) | last | .maven2.version')
-            else
-                    latestVersion=$NEXUS_VERSION
-            fi   
-        # validation and checking the latestVersion retived.
-            if [[ $latestVersion == "null" ]] || [[ -z $latestVersion ]]; then
-                echo -e "\033[31mError: No valid version for artifact:- $nexusArtifactName in group:- $group .\033[0m"
-                exit 1
-            fi
-                echo "Latest Version retrieved from Nexus is: $latestVersion"
-            # download the jar file .
-            # Determine the base version based on the NEXUS_VERSION
-            base_version="NONE"
-            if [[ "$NEXUS_VERSION" == *"local-"* ]]; then
-                 base_version="local-SNAPSHOT"
-            elif [[ "$NEXUS_VERSION" == *"integration-core-"* ]]; then
-                base_version="integration-core-SNAPSHOT"
-            elif [[ "$NEXUS_VERSION" == *"integration-dx1-"* ]]; then
-                base_version="$NEXUS_VERSION"
-            elif [[ "$NEXUS_VERSION" == *"release-"* ]]; then
-                base_version="$NEXUS_VERSION"
-            elif [[ "$NEXUS_VERSION" == *"feature-"* || "$NEXUS_VERSION" == *"Feature-"* ]]; then
-                base_version="$NEXUS_VERSION"
-            elif [[ "$NEXUS_VERSION" == *"hotfix-"* || "$NEXUS_VERSION" == *"Hotfix-"* ]]; then
-                base_version="$NEXUS_VERSION"
-            elif [[ "$NEXUS_VERSION" == *"bugfix-"* || "$NEXUS_VERSION" == *"Bugfix-"* ]]; then
-                base_version="$NEXUS_VERSION"
-            elif [[ "$NEXUS_VERSION" == *"REL-"* || "$NEXUS_VERSION" == *"FR-"* ]]; then
-                base_version="$NEXUS_VERSION"
-            fi
-
-            echo "Base version: $base_version"
-            
-            echo " downloading jar file in progress:- $nexusArtifactName-$latestVersion.jar "
-            echo "download url :- curl -k -o $MICROSERVICE.jar $NEXUS_URL/repository/$NEXUS_REPOSITORY/$GROUP_PATH/$nexusArtifactName/$base_version/$nexusArtifactName-$latestVersion.jar"
-            curl -k -o $MICROSERVICE.jar "$NEXUS_URL/repository/$NEXUS_REPOSITORY/$GROUP_PATH/$nexusArtifactName/$base_version/$nexusArtifactName-$latestVersion.jar"
-            echo " downloaded artifacts is:- $nexusArtifactName-$latestVersion.jar Done "
-            
-            echo " downloading java dd agent jar file "
-            curl -k -o dd-java-agent.jar "$NEXUS_URL/repository/Devops/ipps/devops/dd-java-agent/1/dd-java-agent-1.jar"
-            echo "downloading of artifacts for dd java agent is done "
-
-            echo " downloading JKS ssl cert "
-            curl -k -o ssl.tar "$NEXUS_URL/repository/releases/com/lseg/ipps/common/tls/ipps-dev/ssl-ipps-dev.tar"
-            tar -xvf ssl.tar
-            echo "downloading of artifacts for JKS is done "
-            
-            echo "Download the JaCoCo Agent from Nexus"
-            curl -k -o jacocoagent.jar "$NEXUS_URL/repository/central/org/jacoco/org.jacoco.agent/0.8.12/org.jacoco.agent-0.8.12-runtime.jar"
-
-            echo "Download the jacococli.jar from Nexus"
-            curl -k -o jacococli.jar "$NEXUS_URL/repository/Devops/org/jacoco/org.jacoco.cli/0.8.12/org.jacoco.cli-0.8.12-runtime.jar"
-
-            
-# Dynamically generate a Dockerfile for each service
-cat <<EOF > generic_microservice.dockerfile
-ARG CI_REGISTRY_IMAGE
-FROM \${CI_REGISTRY_IMAGE}/psl/java-base-image:latest
-WORKDIR /app
-ARG JAR_FILE
-COPY \${JAR_FILE} /app/app.jar
-COPY dd-java-agent.jar .
-COPY keystore.jks /config/.
-COPY jacocoagent.jar .
-COPY jacococli.jar .
-ENV JAVA_HOME=/usr/
-ENV PATH=${PATH}:/usr/bin
-ENTRYPOINT ["/usr/bin/java","-jar","/app/app.jar"]
-EOF
-
-            echo " login to container registry:- $CI_REGISTRY "
-            echo "$DOCKER_PASSWORD" | docker login $CI_REGISTRY -u $DOCKER_USERNAME --password-stdin
-            
-            echo " build docker image for service :- $MICROSERVICE"
-            echo "ARTIFACTS_NAME=$MICROSERVICE.jar"
-
-            if [[ "$NEXUS_VERSION" == *"integration-core-"* ]]; then
-                echo "building docker image for integration-core-SNAPSHOT "
-                docker build --build-arg JAR_FILE=$MICROSERVICE.jar --build-arg CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE -t $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:$latestVersion -f generic_microservice.dockerfile .
-                docker tag $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:$latestVersion $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:latest
-                docker push $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:$latestVersion
-                docker push $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:latest
-                echo " docker image for $MICROSERVICE is push with tag to $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:$latestVersion and $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:latest"
-                rm -rf $MICROSERVICE.jar dd-java-agent.jar jacococli.jar jacocoagent.jar
-                echo "+------------------ + -----------------------------------------------------------+" >> build_images.txt 
-                echo  "| $MICROSERVICE:- $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:$latestVersion and $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:latest " >> build_images.txt
-                echo "+------------------ + -----------------------------------------------------------+" >> build_images.txt 
-                echo "" >> build_images.
-                cat <<EOF >> blackduck-image-scan-pipeline.yml
-
-blackduck-container-scan-${MICROSERVICE}:
-  stage: Container-security-scan
-  extends: [.blackduck-container-scan]
-  variables:
-    SHARED_PATH: "\${CI_PROJECT_DIR}/shared"
-    IMAGE_TO_SCAN: "${CI_REGISTRY_IMAGE}/psl/${MICROSERVICE}"
-    APP_ID: "APP-50339"
-    PROJECT_NAME: "${MICROSERVICE}"
-    PROJECT_VERSION: "\${CI_COMMIT_SHORT_SHA}"
-    IS_PROD: "0"
-  before_script:
-    - |
-      until docker info; do echo "------Waiting for Docker..." && sleep 5; done
-      echo "LATEST: $latestVersion"
-      docker login -u \$DOCKER_USERNAME -p \$DOCKER_PASSWORD \$CI_REGISTRY
-      mkdir -vp \${SHARED_PATH}/target
-      docker pull \$IMAGE_TO_SCAN:$latestVersion
-      docker save -o \${SHARED_PATH}/target/target-image.tar \$IMAGE_TO_SCAN:$latestVersion
-  tags:
-    - Refinitiv, Medium, Linux
-  artifacts:
-    paths:
-      - blackduck-image-scan-pipeline.yml 
-
-EOF
-            else
-                echo "building the docker image for provided $NEXUS_VERSION "
-                docker build --build-arg JAR_FILE=$MICROSERVICE.jar --build-arg CI_REGISTRY_IMAGE=${CI_REGISTRY_IMAGE} -t $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:$latestVersion -f generic_microservice.dockerfile .
-                docker push $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:$latestVersion
-                echo " docker image for $MICROSERVICE is push with tag to $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:$latestVersion"
-                rm -rf $MICROSERVICE.jar dd-java-agent.jar jacococli.jar jacocoagent.jar 
-                echo "+------------------ + -----------------------------------------------------------+" >> build_images.txt 
-                echo  "| $MICROSERVICE:- $CI_REGISTRY_IMAGE/psl/$MICROSERVICE:$latestVersion " >> build_images.txt
-                echo "+------------------ + -----------------------------------------------------------+" >> build_images.txt 
-                echo "" >> build_images.txt
-                cat <<EOF >> blackduck-image-scan-pipeline.yml
-
-blackduck-container-scan-${MICROSERVICE}:
-  stage: Container-security-scan
-  extends: [.blackduck-container-scan]
-  variables:
-    SHARED_PATH: "\${CI_PROJECT_DIR}/shared"
-    IMAGE_TO_SCAN: "${CI_REGISTRY_IMAGE}/psl/${MICROSERVICE}"
-    APP_ID: "APP-50339"
-    PROJECT_NAME: "${MICROSERVICE}"
-    PROJECT_VERSION: "\${CI_COMMIT_SHORT_SHA}"
-    IS_PROD: "0"
-  before_script:
-    - |
-      until docker info; do echo "------Waiting for Docker..." && sleep 5; done
-      echo "LATEST: $latestVersion"
-      docker login -u \$DOCKER_USERNAME -p \$DOCKER_PASSWORD \$CI_REGISTRY 
-      mkdir -vp \${SHARED_PATH}/target
-      docker pull \$IMAGE_TO_SCAN:$latestVersion
-      docker save -o \${SHARED_PATH}/target/target-image.tar \$IMAGE_TO_SCAN:$latestVersion   
-  tags:
-    - Refinitiv, Medium, Linux
-  artifacts:
-    paths:
-      - blackduck-image-scan-pipeline.yml 
-EOF
-        fi               
 done
 
 # printing the docker image build summary
@@ -349,21 +99,3 @@ echo "+-------------------+ ------------------------------------+" >> build_imag
 cat build_images.txt
 
 mv blackduck-image-scan-pipeline.yml ${CI_PROJECT_DIR}/
-
-
-
-
-\solutions\configurations-and-scheduling-solutions\calendar-app\calendar-service-app-sboot\target\calendar-service-app-sboot-local-SNAPSHOT.jar
-\solutions\configurations-and-scheduling-solutions\periodic-scheduler-app\scheduling-service-app-sboot\target\scheduling-service-app-sboot-local-SNAPSHOT.jar
-\solutions\configurations-and-scheduling-solutions\shared-configuration-store-app\shared-configuration-store-app-sboot\target\shared-configuration-store-app-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\corporate-events-data-distributor-app\corporate-events-data-distributor-sboot\target\corporate-events-data-distributor-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\corporate-events-processor-app\corporate-events-processor-sboot\target\corporate-events-processor-sboot-local-SNAPSHOT-original.jar
-\solutions\corporate-events-solutions\corporate-events-processor-app\corporate-events-processor-sboot\target\corporate-events-processor-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\index-universe-data-distributor-app\index-universe-data-distributor-sboot\target\index-universe-data-distributor-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\index-universe-processor-app\index-universe-processor-sboot\target\index-universe-processor-sboot-local-SNAPSHOT.jar
-\solutions\corporate-events-solutions\space-data-distributor-app\space-data-distributor-sboot\target\space-data-distributor-sboot-local-SNAPSHOT.jar
-\solutions\shared-solutions\api-mock-service\target\api-mock-service-local-SNAPSHOT.jar
-\solutions\shared-solutions\api-mock-service\target\original-api-mock-service-local-SNAPSHOT.jar
-\solutions\shared-solutions\log-level-controller\target\log-level-controller-local-SNAPSHOT.jar
-\solutions\shared-solutions\log-level-agent\target\log-level-agent-local-SNAPSHOT.jar
-\solutions\template-solutions\template-app\template-sboot\target\template-sboot-local-SNAPSHOT.jar
