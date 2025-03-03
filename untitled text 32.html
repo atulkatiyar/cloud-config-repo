@@ -2,6 +2,12 @@ Error opening zip file or JAR manifest missing : /app/log-level-agent.jar
 Error occurred during initialization of VM
 agent library failed to init: instrument
 
+getting below error when passing javaagent jar in VM options
+
+Error opening zip file or JAR manifest missing : /app/log-level-agent.jar
+
+below is my java agent class
+
 public class LogLevelStartUpAgent {
 public static final int TIMEOUT = 15000;
 public static final String LOG_LEVEL_CHANGES_DURATION = "log.level.changes.duration";
