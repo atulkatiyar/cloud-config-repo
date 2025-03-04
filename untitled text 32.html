@@ -1,87 +1,114 @@
-rror calling REST API to fetch updated Log4j2.xml file: PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
-Calling /Log4j.xml service to fetch updated Logging level : at 2025-03-03T19:36:05.530318580Z
+package com.lseg.ipps.solutions.shared.agent;
 
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.lang.instrument.Instrumentation;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.security.KeyStore;
+import java.time.Instant;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-echo -n | openssl s_client -connect your-service-url:443 | openssl x509 > certificate.pem
+public class LogLevelStartUpAgent {
 
+    public static final int TIMEOUT = 15000;
+    public static final String LOG_LEVEL_CHANGES_DURATION = "log.level.changes.duration";
+    public static final int LOG_LEVEL_CHANGES_DURATION_DEFAULT = 10;
+    public static final String LOG4J2_XML_FILE_NAME = "/app/log4j2.xml";
+    public static final String LOG_LEVEL_CONTROLLER_HOST = "log.level.controller.host";
 
-keytool -importcert -file certificate.pem -keystore truststore.jks -alias customcert
+    /**
+     * Method to check if there is any update on logging config via Java Instrumentation Agent
+     * @param agentArgs
+     * @param inst
+     */
+    public static void premain(String agentArgs, Instrumentation inst) {
+        try {
+            fetchUpdatedLog4jXml();
 
-java -Djavax.net.ssl.trustStore=/path/to/truststore.jks \
-     -Djavax.net.ssl.trustStorePassword=changeit \
-     -javaagent:/app/log-level-agent.jar -jar app.jar
+            ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+            Runnable checkLogLevelTask = LogLevelStartUpAgent::fetchUpdatedLog4jXml;
 
-
-  SSL_ENABLED         : true
-  SSL_KEY_STORE_ALIAS : lsegippseks
-  SSL_KEY_STORE_PATH  : /config/keystore.jks
-  SSL_KEY_STORE_TYPE  : PKCS12
-  ssl_secret_name     : ipps-dev-psl-eks-ssl-password
-
-
--javaagent:/path/to/your-agent.jar 
--Djavax.net.ssl.trustStore=/config/keystore.jks 
--Djavax.net.ssl.trustStoreType=PKCS12 
--Djavax.net.ssl.trustStorePassword=${SSL_PASSWORD}
-
-
-public static void fetchUpdatedLog4jXml() {
-    try {
-        String loggingLevelClientAppUrl = System.getProperty(LOG_LEVEL_CONTROLLER_HOST) + "/" + LOG4J2_XML_FILE_NAME;
-        System.out.println("Calling /Log4j.xml service to fetch updated Logging level : at " + Instant.now());
-        
-        // Get system properties for SSL
-        String trustStorePath = System.getProperty("javax.net.ssl.trustStore");
-        String trustStorePassword = System.getProperty("javax.net.ssl.trustStorePassword");
-        String trustStoreType = System.getProperty("javax.net.ssl.trustStoreType", "JKS");
-        
-        // Log the SSL configuration being used (for debugging purposes)
-        System.out.println("Using trustStore: " + trustStorePath);
-        System.out.println("Using trustStoreType: " + trustStoreType);
-        
-        // Only set up custom SSL context if trustStore is specified
-        if (trustStorePath != null && !trustStorePath.isEmpty()) {
-            // Initialize the trust store
-            KeyStore trustStore = KeyStore.getInstance(trustStoreType);
-            try (FileInputStream trustStoreStream = new FileInputStream(trustStorePath)) {
-                trustStore.load(trustStoreStream, trustStorePassword.toCharArray());
+            long logLevelChangesDuration = LOG_LEVEL_CHANGES_DURATION_DEFAULT;
+            try{
+                logLevelChangesDuration = Long.parseLong(System.getProperty(LOG_LEVEL_CHANGES_DURATION));
+            } catch (Exception e) {
+                System.err.println("unable to get property log.level.changes.duration setting default value as 10 seconds: " + e.getMessage());
             }
-            
-            // Set up trust manager factory
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(trustStore);
-            
-            // Create SSL context with our trust manager
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, tmf.getTrustManagers(), null);
-            
-            // Set the default SSL socket factory
-            HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
+            scheduledExecutorService.scheduleAtFixedRate(checkLogLevelTask, logLevelChangesDuration, logLevelChangesDuration, TimeUnit.SECONDS);
+
+        } catch (Exception e) {
+            System.err.println("Error calling REST API: " + e.getMessage());
         }
-        
-        URL url = new URL(loggingLevelClientAppUrl);
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestProperty("Accept", "application/xml");
-        connection.setRequestMethod("GET");
-        connection.setConnectTimeout(TIMEOUT);
-        connection.setReadTimeout(TIMEOUT);
-        int responseCode = connection.getResponseCode();
-        if (responseCode == 200) {
-            File outputFile = new File(LOG4J2_XML_FILE_NAME);
-            try (InputStream inputStream = connection.getInputStream();
-                 FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
-                byte[] buffer = new byte[1024];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    fileOutputStream.write(buffer, 0, bytesRead);
+    }
+
+    /**
+     * Method to call generate-log4j-xml REST API to check if Log4j2 configuration has been updated
+     */
+    public static void fetchUpdatedLog4jXml() {
+        try {
+            String loggingLevelClientAppUrl = System.getProperty(LOG_LEVEL_CONTROLLER_HOST) + "/" + LOG4J2_XML_FILE_NAME;
+            System.out.println("Calling /Log4j.xml service to fetch updated Logging level : at " + Instant.now());
+
+            // Get system properties for SSL
+            String trustStorePath = System.getProperty("javax.net.ssl.trustStore");
+            String trustStorePassword = System.getProperty("javax.net.ssl.trustStorePassword");
+            String trustStoreType = System.getProperty("javax.net.ssl.trustStoreType", "JKS");
+
+            // Log the SSL configuration being used (for debugging purposes)
+            System.out.println("Using trustStore: " + trustStorePath);
+            System.out.println("Using trustStoreType: " + trustStoreType);
+
+            // Only set up custom SSL context if trustStore is specified
+            if (trustStorePath != null && !trustStorePath.isEmpty()) {
+                // Initialize the trust store
+                KeyStore trustStore = KeyStore.getInstance(trustStoreType);
+                try (FileInputStream trustStoreStream = new FileInputStream(trustStorePath)) {
+                    trustStore.load(trustStoreStream, trustStorePassword.toCharArray());
+                }
+
+                // Set up trust manager factory
+                TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                tmf.init(trustStore);
+
+                // Create SSL context with our trust manager
+                SSLContext sslContext = SSLContext.getInstance("TLS");
+                sslContext.init(null, tmf.getTrustManagers(), null);
+
+                // Set the default SSL socket factory
+                HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
+            }
+
+            URL url = new URL(loggingLevelClientAppUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestProperty("Accept", "application/xml");
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(TIMEOUT);
+            connection.setReadTimeout(TIMEOUT);
+            int responseCode = connection.getResponseCode();
+            if (responseCode == 200) {
+                File outputFile = new File(LOG4J2_XML_FILE_NAME);
+                try (InputStream inputStream = connection.getInputStream();
+                     FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
+
+                    byte[] buffer = new byte[1024];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        fileOutputStream.write(buffer, 0, bytesRead);
+                    }
                 }
             }
-        } else {
-            System.err.println("Error fetching Log4j2.xml: HTTP response code " + responseCode);
+        } catch (Exception e) {
+            System.err.println("Error calling REST API to fetch updated Log4j2.xml file: " + e.getMessage());
         }
-    } catch (Exception e) {
-        System.err.println("Error calling REST API to fetch updated Log4j2.xml file: " + e.getMessage());
-        e.printStackTrace();  // Add stack trace for better debugging
     }
 }
+
