@@ -1,19 +1,85 @@
-    @Test
-    void testFetchUpdatedLog4jXml_Success() throws Exception {
-        URL urlMock = mock(URL.class);  // Mocking URL instance
-        HttpURLConnection connectionMock = mock(HttpURLConnection.class);
-        InputStream inputStreamMock = new ByteArrayInputStream("<xml></xml>".getBytes());
+"C:\Program Files\Amazon Corretto\jdk17.0.5_8\bin\java.exe" -ea -Didea.test.cyclic.buffer.size=1048576 "-javaagent:C:\Program Files (x86)\JetBrains\IntelliJ IDEA Community Edition 2023.1.2\lib\idea_rt.jar=65185:C:\Program Files (x86)\JetBrains\IntelliJ IDEA Community Edition 2023.1.2\bin" -Dfile.encoding=UTF-8 -classpath "D:\Users\akatiyar1\.m2\repository\org\junit\platform\junit-platform-launcher\1.8.2\junit-platform-launcher-1.8.2.jar;C:\Program Files (x86)\JetBrains\IntelliJ IDEA Community Edition 2023.1.2\lib\idea_rt.jar;C:\Program Files (x86)\JetBrains\IntelliJ IDEA Community Edition 2023.1.2\plugins\junit\lib\junit5-rt.jar;C:\Program Files (x86)\JetBrains\IntelliJ IDEA Community Edition 2023.1.2\plugins\junit\lib\junit-rt.jar;D:\Users\akatiyar1\Documents\workspace_integration_core\solutions\shared-solutions\log-level-agent\target\test-classes;D:\Users\akatiyar1\Documents\workspace_integration_core\solutions\shared-solutions\log-level-agent\target\classes;D:\Users\akatiyar1\.m2\repository\org\mockito\mockito-inline\5.1.0\mockito-inline-5.1.0.jar;D:\Users\akatiyar1\.m2\repository\org\mockito\mockito-core\4.5.1\mockito-core-4.5.1.jar;D:\Users\akatiyar1\.m2\repository\net\bytebuddy\byte-buddy\1.12.9\byte-buddy-1.12.9.jar;D:\Users\akatiyar1\.m2\repository\net\bytebuddy\byte-buddy-agent\1.12.9\byte-buddy-agent-1.12.9.jar;D:\Users\akatiyar1\.m2\repository\org\objenesis\objenesis\3.2\objenesis-3.2.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\boot\spring-boot-starter-test\3.2.5\spring-boot-starter-test-3.2.5.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\boot\spring-boot-starter\3.2.5\spring-boot-starter-3.2.5.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\boot\spring-boot\3.2.5\spring-boot-3.2.5.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\spring-context\6.1.6\spring-context-6.1.6.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\spring-aop\6.1.6\spring-aop-6.1.6.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\spring-beans\5.3.20\spring-beans-5.3.20.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\spring-expression\6.1.6\spring-expression-6.1.6.jar;D:\Users\akatiyar1\.m2\repository\io\micrometer\micrometer-observation\1.12.5\micrometer-observation-1.12.5.jar;D:\Users\akatiyar1\.m2\repository\io\micrometer\micrometer-commons\1.12.5\micrometer-commons-1.12.5.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\boot\spring-boot-autoconfigure\3.2.5\spring-boot-autoconfigure-3.2.5.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\boot\spring-boot-starter-logging\3.2.5\spring-boot-starter-logging-3.2.5.jar;D:\Users\akatiyar1\.m2\repository\ch\qos\logback\logback-classic\1.4.14\logback-classic-1.4.14.jar;D:\Users\akatiyar1\.m2\repository\ch\qos\logback\logback-core\1.4.14\logback-core-1.4.14.jar;D:\Users\akatiyar1\.m2\repository\org\apache\logging\log4j\log4j-to-slf4j\2.21.1\log4j-to-slf4j-2.21.1.jar;D:\Users\akatiyar1\.m2\repository\org\apache\logging\log4j\log4j-api\2.21.1\log4j-api-2.21.1.jar;D:\Users\akatiyar1\.m2\repository\org\slf4j\jul-to-slf4j\2.0.13\jul-to-slf4j-2.0.13.jar;D:\Users\akatiyar1\.m2\repository\jakarta\annotation\jakarta.annotation-api\2.1.1\jakarta.annotation-api-2.1.1.jar;D:\Users\akatiyar1\.m2\repository\org\yaml\snakeyaml\2.2\snakeyaml-2.2.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\boot\spring-boot-test\3.2.5\spring-boot-test-3.2.5.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\boot\spring-boot-test-autoconfigure\3.2.5\spring-boot-test-autoconfigure-3.2.5.jar;D:\Users\akatiyar1\.m2\repository\com\jayway\jsonpath\json-path\2.9.0\json-path-2.9.0.jar;D:\Users\akatiyar1\.m2\repository\org\slf4j\slf4j-api\2.0.11\slf4j-api-2.0.11.jar;D:\Users\akatiyar1\.m2\repository\jakarta\xml\bind\jakarta.xml.bind-api\2.3.3\jakarta.xml.bind-api-2.3.3.jar;D:\Users\akatiyar1\.m2\repository\jakarta\activation\jakarta.activation-api\1.2.2\jakarta.activation-api-1.2.2.jar;D:\Users\akatiyar1\.m2\repository\net\minidev\json-smart\2.5.1\json-smart-2.5.1.jar;D:\Users\akatiyar1\.m2\repository\net\minidev\accessors-smart\2.5.1\accessors-smart-2.5.1.jar;D:\Users\akatiyar1\.m2\repository\org\ow2\asm\asm\9.6\asm-9.6.jar;D:\Users\akatiyar1\.m2\repository\org\assertj\assertj-core\3.22.0\assertj-core-3.22.0.jar;D:\Users\akatiyar1\.m2\repository\org\awaitility\awaitility\4.2.1\awaitility-4.2.1.jar;D:\Users\akatiyar1\.m2\repository\org\hamcrest\hamcrest\2.2\hamcrest-2.2.jar;D:\Users\akatiyar1\.m2\repository\org\junit\jupiter\junit-jupiter\5.8.2\junit-jupiter-5.8.2.jar;D:\Users\akatiyar1\.m2\repository\org\junit\jupiter\junit-jupiter-api\5.8.2\junit-jupiter-api-5.8.2.jar;D:\Users\akatiyar1\.m2\repository\org\opentest4j\opentest4j\1.2.0\opentest4j-1.2.0.jar;D:\Users\akatiyar1\.m2\repository\org\junit\platform\junit-platform-commons\1.8.2\junit-platform-commons-1.8.2.jar;D:\Users\akatiyar1\.m2\repository\org\apiguardian\apiguardian-api\1.1.2\apiguardian-api-1.1.2.jar;D:\Users\akatiyar1\.m2\repository\org\junit\jupiter\junit-jupiter-params\5.8.2\junit-jupiter-params-5.8.2.jar;D:\Users\akatiyar1\.m2\repository\org\junit\jupiter\junit-jupiter-engine\5.8.2\junit-jupiter-engine-5.8.2.jar;D:\Users\akatiyar1\.m2\repository\org\junit\platform\junit-platform-engine\1.8.2\junit-platform-engine-1.8.2.jar;D:\Users\akatiyar1\.m2\repository\org\mockito\mockito-junit-jupiter\4.5.1\mockito-junit-jupiter-4.5.1.jar;D:\Users\akatiyar1\.m2\repository\org\skyscreamer\jsonassert\1.5.1\jsonassert-1.5.1.jar;D:\Users\akatiyar1\.m2\repository\com\vaadin\external\google\android-json\0.0.20131108.vaadin1\android-json-0.0.20131108.vaadin1.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\spring-core\6.1.6\spring-core-6.1.6.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\spring-jcl\6.1.6\spring-jcl-6.1.6.jar;D:\Users\akatiyar1\.m2\repository\org\springframework\spring-test\6.1.6\spring-test-6.1.6.jar;D:\Users\akatiyar1\.m2\repository\org\xmlunit\xmlunit-core\2.9.1\xmlunit-core-2.9.1.jar" com.intellij.rt.junit.JUnitStarter -ideVersion5 -junit5 com.lseg.ipps.solutions.shared.agent.LogLevelStartUpAgentTest,testFetchUpdatedLog4jXml_Success
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
 
-        when(urlMock.openConnection()).thenReturn(connectionMock);
-        when(connectionMock.getResponseCode()).thenReturn(200);
-        when(connectionMock.getInputStream()).thenReturn(inputStreamMock);
+org.mockito.exceptions.misusing.WrongTypeOfReturnValue: 
+URL cannot be returned by toLowerCase()
+toLowerCase() should return String
+***
+If you're unsure why you're getting above error read on.
+Due to the nature of the syntax above problem might occur because:
+1. This exception *might* occur in wrongly written multi-threaded tests.
+   Please refer to Mockito FAQ on limitations of concurrency testing.
+2. A spy is stubbed using when(spy.foo()).then() syntax. It is safer to stub spies - 
+   - with doReturn|Throw() family of methods. More in javadocs for Mockito.spy() method.
 
-        try (MockedStatic<URL> mockedUrl = mockStatic(URL.class)) {
-            mockedUrl.when(() -> new URL("https://mocked-url.com//app/log4j2.xml")).thenReturn(urlMock);
 
-            LogLevelStartUpAgent.fetchUpdatedLog4jXml();
-
-            verify(connectionMock, times(1)).getResponseCode();
-            verify(connectionMock, times(1)).getInputStream();
-        }
-    }
+	at com.lseg.ipps.solutions.shared.agent.LogLevelStartUpAgentTest.testFetchUpdatedLog4jXml_Success(LogLevelStartUpAgentTest.java:77)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:725)
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:149)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:140)
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:84)
+	at org.junit.jupiter.engine.execution.ExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(ExecutableInvoker.java:115)
+	at org.junit.jupiter.engine.execution.ExecutableInvoker.lambda$invoke$0(ExecutableInvoker.java:105)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45)
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37)
+	at org.junit.jupiter.engine.execution.ExecutableInvoker.invoke(ExecutableInvoker.java:104)
+	at org.junit.jupiter.engine.execution.ExecutableInvoker.invoke(ExecutableInvoker.java:98)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:214)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:210)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:135)
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:66)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:151)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:141)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:139)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:138)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:95)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:155)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:141)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:139)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:138)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:95)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:155)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:141)
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:139)
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:138)
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:95)
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57)
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:107)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:88)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:54)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:67)
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:52)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:114)
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:86)
+	at org.junit.platform.launcher.core.DefaultLauncherSession$DelegatingLauncher.execute(DefaultLauncherSession.java:86)
+	at org.junit.platform.launcher.core.SessionPerRequestLauncher.execute(SessionPerRequestLauncher.java:53)
+	at com.intellij.junit5.JUnit5IdeaTestRunner.startRunnerWithArgs(JUnit5IdeaTestRunner.java:57)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
