@@ -1,4 +1,29 @@
-org.mockito.exceptions.misusing.InvalidUseOfMatchersException: 
-Misplaced or misused argument matcher detected here:
+ @Test
+    void testFetchUpdatedLog4jXml_Success() throws Exception {
+        try (MockedStatic<URL> mockedUrl = mockStatic(URL.class)) {
+            URL urlMock = mock(URL.class);
+            HttpURLConnection connectionMock = mock(HttpURLConnection.class);
+            InputStream inputStreamMock = new ByteArrayInputStream("<xml></xml>".getBytes());
 
-mockedUrl.when(() -> new URL(anyString())).thenReturn(urlMock);
+            // Instead of anyString(), directly provide the expected URL string
+            mockedUrl.when(() -> new URL("https://mocked-url.com//app/log4j2.xml")).thenReturn(urlMock);
+
+            when(urlMock.openConnection()).thenReturn(connectionMock);
+            when(connectionMock.getResponseCode()).thenReturn(200);
+            when(connectionMock.getInputStream()).thenReturn(inputStreamMock);
+
+            LogLevelStartUpAgent.fetchUpdatedLog4jXml();
+
+            verify(connectionMock, times(1)).getResponseCode();
+            verify(connectionMock, times(1)).getInputStream();
+        }
+    }
+
+    @Test
+    void testFetchUpdatedLog4jXml_ExceptionHandling() {
+        try (MockedStatic<URL> mockedUrl = mockStatic(URL.class)) {
+            mockedUrl.when(() -> new URL("https://mocked-url.com//app/log4j2.xml")).thenThrow(new RuntimeException("Connection error"));
+
+            LogLevelStartUpAgent.fetchUpdatedLog4jXml();
+        }
+    }
