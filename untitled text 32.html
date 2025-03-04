@@ -18,3 +18,9 @@ java -Djavax.net.ssl.trustStore=/path/to/truststore.jks \
   SSL_KEY_STORE_PATH  : /config/keystore.jks
   SSL_KEY_STORE_TYPE  : PKCS12
   ssl_secret_name     : ipps-dev-psl-eks-ssl-password
+
+
+-javaagent:/path/to/your-agent.jar 
+-Djavax.net.ssl.trustStore=/config/keystore.jks 
+-Djavax.net.ssl.trustStoreType=PKCS12 
+-Djavax.net.ssl.trustStorePassword=${SSL_PASSWORD}
