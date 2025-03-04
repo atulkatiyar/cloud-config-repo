@@ -1,36 +1,4 @@
-void setUp() {
-        System.setProperty("log.level.controller.host", "https://mocked-url.com");
-        System.setProperty("javax.net.ssl.trustStore", "mocked-truststore.jks");
-        System.setProperty("javax.net.ssl.trustStorePassword", "changeit");
-    }
+org.mockito.exceptions.misusing.InvalidUseOfMatchersException: 
+Misplaced or misused argument matcher detected here:
 
-    @Test
-    void testFetchUpdatedLog4jXml_Success() throws Exception {
-        MockedStatic<URL> mockedUrl = mockStatic(URL.class);
-        URL urlMock = mock(URL.class);
-        HttpURLConnection connectionMock = mock(HttpURLConnection.class);
-        InputStream inputStreamMock = new ByteArrayInputStream("<xml></xml>".getBytes());
-
-        when(urlMock.openConnection()).thenReturn(connectionMock);
-        when(connectionMock.getResponseCode()).thenReturn(200);
-        when(connectionMock.getInputStream()).thenReturn(inputStreamMock);
-
-        mockedUrl.when(() -> new URL(anyString())).thenReturn(urlMock);
-
-        LogLevelStartUpAgent.fetchUpdatedLog4jXml();
-
-        verify(connectionMock, times(1)).getResponseCode();
-        verify(connectionMock, times(1)).getInputStream();
-
-        mockedUrl.close();
-    }
-
-    @Test
-    void testFetchUpdatedLog4jXml_ExceptionHandling() {
-        MockedStatic<URL> mockedUrl = mockStatic(URL.class);
-        mockedUrl.when(() -> new URL(anyString())).thenThrow(new RuntimeException("Connection error"));
-
-        LogLevelStartUpAgent.fetchUpdatedLog4jXml();
-
-        mockedUrl.close();
-    }
+mockedUrl.when(() -> new URL(anyString())).thenReturn(urlMock);
