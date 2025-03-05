@@ -30,3 +30,6 @@ redis.clients.jedis.exceptions.JedisConnectionException: Failed to create socket
 SSLContext defaultSslContext = SSLContext.getInstance("TLS");
 defaultSslContext.init(null, null, null);
 HttpsURLConnection.setDefaultSSLSocketFactory(defaultSslContext.getSocketFactory());
+
+
+how can i mock below line in junit test String trustStorePassword = envMap.get(System.getProperty("javax.net.ssl.trustStorePassword")); I am using mockito
