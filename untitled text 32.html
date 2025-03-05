@@ -1,7 +1,7 @@
 HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
 
 causing java.security.KeyManagementException: problem accessing trust store
-
+redis.clients.jedis.exceptions.JedisConnectionException: Failed to create socket
 
 -Djavax.net.ssl.trustStore=/config/keystore.jks -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=SSL_KEY_STORE_PASSWORD
 
