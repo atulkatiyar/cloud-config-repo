@@ -24,3 +24,9 @@ redis.clients.jedis.exceptions.JedisConnectionException: Failed to create socket
                 System.out.println("Set the default SSL socket factory");
                 HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
             }
+
+
+
+SSLContext defaultSslContext = SSLContext.getInstance("TLS");
+defaultSslContext.init(null, null, null);
+HttpsURLConnection.setDefaultSSLSocketFactory(defaultSslContext.getSocketFactory());
