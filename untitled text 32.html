@@ -33,3 +33,23 @@ HttpsURLConnection.setDefaultSSLSocketFactory(defaultSslContext.getSocketFactory
 
 
 how can i mock below line in junit test String trustStorePassword = envMap.get(System.getProperty("javax.net.ssl.trustStorePassword")); I am using mockito
+
+
+ @Test
+    void testTrustStorePasswordFetch() {
+        try (MockedStatic<System> mockedSystem = Mockito.mockStatic(System.class)) {
+            // Mock System.getProperty()
+            mockedSystem.when(() -> System.getProperty("javax.net.ssl.trustStorePassword"))
+                        .thenReturn("SSL_KEY_STORE_PASSWORD");
+
+            // Mock System.getenv() to return a fake environment map
+            mockedSystem.when(System::getenv)
+                        .thenReturn(Map.of("SSL_KEY_STORE_PASSWORD", "mockedPassword"));
+
+            // Fetch the password
+            String trustStorePassword = System.getenv().get(System.getProperty("javax.net.ssl.trustStorePassword"));
+
+            // Validate the result
+            assertEquals("mockedPassword", trustStorePassword);
+        }
+    }
