@@ -4,3 +4,23 @@ causing java.security.KeyManagementException: problem accessing trust store
 
 
 -Djavax.net.ssl.trustStore=/config/keystore.jks -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=SSL_KEY_STORE_PASSWORD
+
+
+ String trustStorePath = System.getProperty("javax.net.ssl.trustStore");
+            String trustStorePassword = System.getenv().get(System.getProperty("javax.net.ssl.trustStorePassword"));
+            System.out.println("fetchUpdatedLog4jXml " + trustStorePath);
+            if (trustStorePath != null && !trustStorePath.isEmpty()) {
+                System.out.println("trustStorePath found ");
+                KeyStore trustStore = KeyStore.getInstance( System.getProperty("javax.net.ssl.trustStoreType", "JKS"));
+                try (FileInputStream trustStoreStream = new FileInputStream(trustStorePath)) {
+                    trustStore.load(trustStoreStream, trustStorePassword.toCharArray());
+                }
+                System.out.println("trustStorePath " + trustStorePath);
+                TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                tmf.init(trustStore);
+                System.out.println("Create SSL context with our trust manager");
+                SSLContext sslContext = SSLContext.getInstance("TLS");
+                sslContext.init(null, tmf.getTrustManagers(), null);
+                System.out.println("Set the default SSL socket factory");
+                HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
+            }
