@@ -1,3 +1,8 @@
+
+i am trying to update/replace log4j.xml file on kubectl gettting error - app/log4j2.xml (Read-only file system)
+
+below is the code which ios uodating the file if (responseCode == 200) { try (InputStream inputStream = connection.getInputStream(); FileOutputStream fileOutputStream = new FileOutputStream("/app/log4j2.xml")) { byte[] buffer = new byte[1024]; int bytesRead; while ((bytesRead = inputStream.read(buffer)) != -1) { fileOutputStream.write(buffer, 0, bytesRead); } } }
+
 HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
 
 causing java.security.KeyManagementException: problem accessing trust store
