@@ -320,3 +320,41 @@ aws:
         path: ./token_creation.py  # Path to your Python script
     check:
       interval: 600  # Check token validity every 10 minutes (in seconds)
+
+
+
+         <dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-java-sdk-bom</artifactId>
+        <version>1.12.529</version>
+        <type>pom</type>
+        <scope>import</scope>
+    </dependency>
+
+    <!-- AWS SSM (Systems Manager) for Parameter Store -->
+    <dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-java-sdk-ssm</artifactId>
+        <version>1.12.529</version>
+    </dependency>
+
+    <!-- AWS STS (Security Token Service) for token validation -->
+    <dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-java-sdk-sts</artifactId>
+        <version>1.12.529</version>
+    </dependency>
+
+    <!-- AWS Core for credentials -->
+    <dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-java-sdk-core</artifactId>
+        <version>1.12.529</version>
+    </dependency>
+
+    <!-- Logging dependencies -->
+    <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>1.7.36</version>
+    </dependency>
