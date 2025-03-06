@@ -56,3 +56,53 @@ how can i mock below line in junit test String trustStorePassword = envMap.get(S
 
 
          org.mockito.exceptions.base.MockitoException: It is not possible to mock static methods of java.lang.System to avoid interfering with class loading what leads to infinite loops
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+         Install python from Company Portal
+Add python to your system environment variable.
+Add below variables to your system environment variables
+AWS_SHARED_CREDENTIALS_FILE=~/.aws/credentials 
+AWS_PROFILE=saml
+restart of workspace may be required or at least reopen gitbash before proceeding further.
+Download & Run python  file  (token_creation.py)
+first download the file
+edit file to fix values for below variables if required, but at least replace username & passsword.
+profile_content = """[profile saml]
+region = eu-west-1
+output = json
+"""
+IDP_ENTRY_URL = "https://sts.lseg.com/adfs/ls/idpinitiatedsignon.aspx?loginToRp=urn:amazon:webservices"
+USERNAME = <replace_with_your_lseg_email_id>
+PASSWORD = <replace_With_your_login_password>
+AWS_ROLE = "arn:aws:iam::729500479720:role/lseg-ipps-dev-fulladmin-adfs-role"
+AWS_PROFILE_NAME = "saml"
+SAML_PROVIDER="arn:aws:iam::729500479720:saml-provider/STS.LSEG.COM"
+Run this→ python file with command using gitbash
+ pip install lxml  --trusted-host pypi.org --trusted-host files.pythonhosted.org
+ pip install boto3  --trusted-host pypi.org --trusted-host files.pythonhosted.org
+ pip install requests  --trusted-host pypi.org --trusted-host files.pythonhosted.org
+ pip install --upgrade certifi  --trusted-host pypi.org --trusted-host files.pythonhosted.org
+ python ./token_creation.py
+Note: this command updates your D:\Users\username\.aws\credentials file with a JWT token that lasts 1 hour
+OR if 2.a does not work then run the script generate_aws_token.sh (Note: Edit the variables in the script according to your system settings. )
+Now replace the code reference of S3/SQS client code accordingly 
