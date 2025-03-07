@@ -1,0 +1,273 @@
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
+import software.amazon.awssdk.services.ssm.SsmClient;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+@Configuration
+public class AwsTokenRenewalConfig {
+    private static final Logger log = LoggerFactory.getLogger(AwsTokenRenewalConfig.class);
+    
+    @Value("${aws.region:eu-west-1}")
+    private String region;
+    
+    @Value("${aws.profile.name:saml}")
+    private String profileName;
+    
+    @Value("${aws.token.renewal.script.path:./token_creation.py}")
+    private String tokenScriptPath;
+    
+    @Value("${aws.token.check.interval:300}") // Check every 5 minutes by default
+    private long tokenCheckIntervalSeconds;
+    
+    @Value("${aws.use.token.renewal:false}")
+    private boolean useTokenRenewal;
+    
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    
+    @Bean
+    @ConditionalOnProperty(name = "aws.use.token.renewal", havingValue = "true")
+    public AutoRenewingCredentialsProvider autoRenewingCredentialsProvider() {
+        log.info("Setting up auto-renewing credentials provider");
+        AutoRenewingCredentialsProvider provider = new AutoRenewingCredentialsProvider(
+                profileName, tokenScriptPath);
+        
+        // Schedule periodic token validation and renewal
+        scheduler.scheduleAtFixedRate(
+                provider::checkAndRenewTokenIfNeeded, 
+                0, 
+                tokenCheckIntervalSeconds, 
+                TimeUnit.SECONDS);
+        
+        return provider;
+    }
+    
+    @Bean
+    @ConditionalOnProperty(name = "aws.use.token.renewal", havingValue = "true")
+    public SsmClient tokenRenewalSsmClient(AutoRenewingCredentialsProvider credentialsProvider) {
+        return SsmClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider)
+                .build();
+    }
+    
+    @Bean
+    @ConditionalOnProperty(name = "aws.use.token.renewal", havingValue = "false", matchIfMissing = true)
+    public SsmClient standardSsmClient() {
+        log.info("Setting up standard AWS credentials chain");
+        return SsmClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(DefaultCredentialsProvider.create())
+                .build();
+    }
+    
+    /**
+     * Custom credentials provider that automatically renews tokens when they expire
+     */
+    public static class AutoRenewingCredentialsProvider implements AwsCredentialsProvider {
+        private static final Logger log = LoggerFactory.getLogger(AutoRenewingCredentialsProvider.class);
+        private final String profileName;
+        private final String tokenScriptPath;
+        private ProfileCredentialsProvider delegate;
+        
+        public AutoRenewingCredentialsProvider(String profileName, String tokenScriptPath) {
+            this.profileName = profileName;
+            this.tokenScriptPath = tokenScriptPath;
+            this.delegate = ProfileCredentialsProvider.builder()
+                    .profileName(profileName)
+                    .build();
+        }
+        
+        @Override
+        public AwsCredentials resolveCredentials() {
+            try {
+                return delegate.resolveCredentials();
+            } catch (Exception e) {
+                log.warn("Failed to get credentials, attempting to renew token", e);
+                boolean renewed = renewToken();
+                if (renewed) {
+                    // Refresh the delegate to pick up new credentials
+                    delegate = ProfileCredentialsProvider.builder()
+                            .profileName(profileName)
+                            .build();
+                    return delegate.resolveCredentials();
+                }
+                throw e;
+            }
+        }
+        
+        /**
+         * Checks if token is valid and renews if needed
+         */
+        public void checkAndRenewTokenIfNeeded() {
+            try {
+                // Try to use current credentials
+                StsClient stsClient = StsClient.builder()
+                        .region(Region.EU_WEST_1)
+                        .credentialsProvider(delegate)
+                        .build();
+                
+                // Test if credentials are valid
+                stsClient.getCallerIdentity(GetCallerIdentityRequest.builder().build());
+                log.debug("AWS credentials are still valid");
+            } catch (Exception e) {
+                log.info("AWS credentials appear to be expired, attempting to renew token");
+                renewToken();
+            }
+        }
+        
+        /**
+         * Executes the Python token renewal script
+         * @return true if renewal was successful
+         */
+        private boolean renewToken() {
+            try {
+                log.info("Executing token renewal script: {}", tokenScriptPath);
+                
+                // Build the command to execute the Python script
+                ProcessBuilder processBuilder = new ProcessBuilder("python", tokenScriptPath);
+                processBuilder.redirectErrorStream(true);
+                
+                Process process = processBuilder.start();
+                
+                // Log the output from the script
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        log.debug("Token script: {}", line);
+                    }
+                }
+                
+                int exitCode = process.waitFor();
+                if (exitCode == 0) {
+                    log.info("Token renewal completed successfully");
+                    return true;
+                } else {
+                    log.error("Token renewal failed with exit code: {}", exitCode);
+                    return false;
+                }
+            } catch (IOException | InterruptedException e) {
+                log.error("Failed to execute token renewal script", e);
+                return false;
+            }
+        }
+    }
+}
+
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import software.amazon.awssdk.services.ssm.SsmClient;
+import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
+import software.amazon.awssdk.services.ssm.model.GetParameterResponse;
+
+@Service
+public class AwsParameterService {
+    
+    private final SsmClient ssmClient;
+    
+    @Autowired
+    public AwsParameterService(SsmClient ssmClient) {
+        this.ssmClient = ssmClient;
+    }
+    
+    /**
+     * Retrieve a plain text parameter from AWS SSM Parameter Store
+     * 
+     * @param parameterName the full name of the parameter
+     * @return the parameter value
+     */
+    public String getPlainTextParameter(String parameterName) {
+        return getParameter(parameterName, false);
+    }
+    
+    /**
+     * Retrieve a secure string parameter from AWS SSM Parameter Store with decryption
+     * 
+     * @param parameterName the full name of the parameter
+     * @return the decrypted parameter value
+     */
+    public String getSecureParameter(String parameterName) {
+        return getParameter(parameterName, true);
+    }
+    
+    private String getParameter(String parameterName, boolean withDecryption) {
+        GetParameterRequest request = GetParameterRequest.builder()
+                .name(parameterName)
+                .withDecryption(withDecryption)
+                .build();
+        
+        GetParameterResponse response = ssmClient.getParameter(request);
+        return response.parameter().value();
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>bom</artifactId>
+            <version>2.21.1</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <!-- AWS SDK v2 SSM for Parameter Store -->
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>ssm</artifactId>
+    </dependency>
+
+    <!-- AWS SDK v2 STS for token validation -->
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>sts</artifactId>
+    </dependency>
+    
+    <!-- AWS SDK v2 Auth -->
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>auth</artifactId>
+    </dependency>
+
+    <!-- Spring Boot dependencies (if using Spring Boot) -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+</dependencies>
